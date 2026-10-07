@@ -29,7 +29,19 @@ st.markdown("""
 .stTabs [aria-selected="true"] { background:#fff; color:var(--red); }
 .stDataFrame { background:#fff; }
 .admin-panel { background:#fff; border-top:3px solid var(--navy); padding:.75rem; margin-top:1rem; }
-@media (max-width:650px) { .agency-header{min-height:78px;grid-template-columns:92px 1fr 0;padding:.25rem;gap:.4rem;} .agency-logo{height:66px;} .agency-copy p{font-size:.7rem;} .print-box{display:none;} .date-strip{font-size:.85rem;} }
+@media (max-width:650px) {
+    .stSidebar, [data-testid="stSidebar"] { width:85vw !important; max-width:300px !important; }
+    [data-testid="stSidebar"] > div:first-child { width:85vw !important; max-width:300px !important; }
+    .block-container { padding:.25rem .3rem 1.25rem; }
+    .agency-header { min-height:92px; grid-template-columns:108px minmax(0,1fr) 0; padding:.25rem .35rem; gap:.35rem; }
+    .agency-logo { height:78px; max-width:108px; }
+    .agency-copy h1 { font-size:clamp(.86rem,4.2vw,1.15rem); line-height:1.08; }
+    .agency-copy p { font-size:clamp(.58rem,2.8vw,.72rem); line-height:1.12; margin-top:.35rem; }
+    .print-box { display:none; }
+    .date-strip { font-size:.78rem; padding:.42rem .25rem; margin:.4rem 0; }
+    .section-caption { font-size:.9rem; padding:.5rem .25rem; }
+    .stTabs [data-baseweb="tab"] { font-size:.62rem; line-height:1.1; padding:.55rem .18rem; white-space:normal; text-align:center; }
+}
 </style>
 """, unsafe_allow_html=True)
 
