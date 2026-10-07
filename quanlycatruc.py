@@ -1,3 +1,6 @@
+import base64
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
@@ -11,13 +14,14 @@ st.markdown("""
 .stApp { background:#f7f4df; color:#414141; font-family:'Roboto Condensed','Arial Narrow',Arial,sans-serif; }
 .block-container { max-width:1440px; padding:.5rem .35rem 2rem; }
 [data-testid="stHeader"] { background:transparent; }
-.agency-header { background:var(--paper); border-bottom:4px solid #edcf62; min-height:106px; display:flex; align-items:center; gap:1rem; padding:.35rem 1rem; }
-.agency-mark { width:185px; flex:0 0 185px; color:var(--navy); font-family:Arial,sans-serif; font-weight:700; font-size:2rem; line-height:.82; letter-spacing:-2px; }
-.agency-mark small { display:block; margin-top:.4rem; font-size:.55rem; letter-spacing:3px; }
+.stSidebar, [data-testid="stSidebar"] { width:300px !important; }
+[data-testid="stSidebar"] > div:first-child { width:300px !important; }
+.agency-header { background:var(--paper); border-bottom:4px solid #edcf62; min-height:112px; display:grid; grid-template-columns:minmax(180px,28%) minmax(0,1fr) 44px; align-items:center; gap:1rem; padding:.45rem 1rem; }
+.agency-logo { display:block; width:100%; max-width:245px; height:94px; object-fit:contain; object-position:left center; }
 .agency-copy { flex:1; text-align:center; }
-.agency-copy h1 { color:var(--navy); font-size:clamp(1.2rem,2.4vw,2.1rem); line-height:1.1; margin:0; font-weight:700; }
-.agency-copy p { color:var(--red); font-weight:700; font-size:clamp(.85rem,1.6vw,1.35rem); margin:.55rem 0 0; }
-.print-box { width:28px; height:28px; border:1px solid #888; background:#fff; align-self:flex-start; margin:1.5rem .4rem 0 0; }
+.agency-copy h1 { color:var(--navy); font-size:clamp(1rem,2.1vw,1.9rem); line-height:1.1; margin:0; font-weight:700; text-wrap:balance; }
+.agency-copy p { color:var(--red); font-weight:700; font-size:clamp(.75rem,1.25vw,1.2rem); line-height:1.15; margin:.55rem 0 0; text-wrap:balance; }
+.print-box { width:28px; height:28px; border:1px solid #888; background:#fff; justify-self:end; align-self:start; margin:.8rem .1rem 0 0; }
 .date-strip { background:#fff; border:1px solid #eadb98; color:var(--red); text-align:center; font-weight:700; font-size:1.2rem; padding:.45rem .5rem; margin:.6rem 0; }
 .section-caption { background:#fff; border:1px solid var(--line); color:var(--red); font-weight:700; text-align:center; padding:.55rem; margin-top:.25rem; }
 .stTabs [data-baseweb="tab-list"] { gap:0; background:#e5ebf0; border:1px solid var(--line); }
@@ -25,7 +29,7 @@ st.markdown("""
 .stTabs [aria-selected="true"] { background:#fff; color:var(--red); }
 .stDataFrame { background:#fff; }
 .admin-panel { background:#fff; border-top:3px solid var(--navy); padding:.75rem; margin-top:1rem; }
-@media (max-width:650px) { .agency-header{min-height:84px;padding:.25rem;gap:.4rem;} .agency-mark{width:105px;flex-basis:105px;font-size:1.35rem;} .agency-mark small{font-size:.38rem;letter-spacing:1px;} .agency-copy p{font-size:.7rem;} .print-box{display:none;} .date-strip{font-size:.85rem;} }
+@media (max-width:650px) { .agency-header{min-height:78px;grid-template-columns:92px 1fr 0;padding:.25rem;gap:.4rem;} .agency-logo{height:66px;} .agency-copy p{font-size:.7rem;} .print-box{display:none;} .date-strip{font-size:.85rem;} }
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,22 +75,8 @@ else:
         st.session_state.is_admin = False
         st.rerun()
 
-st.markdown("""
-<header class="agency-header">
-    <div class="agency-mark">DEOCA<small>GROUP</small></div>
-    <div class="agency-copy">
-        <h1>CÔNG TY CỔ PHẦN TẬP ĐOÀN ĐÈO CẢ</h1>
-        <p>LỊCH TRỰC CÔNG TÁC QUẢN LÝ VẬN HÀNH TPHCM - TL - MT</p>
-    </div>
-    <div class="print-box" aria-label="Trạng thái in"></div>
-</header>
-<div class="date-strip"> CA: 1 - NGÀY: 26/01/2023</div>
-""", unsafe_allow_html=True)
-
 # ==================== 1. QUẢN LÝ BÁO CÁO CA TRỰC ====================
 if menu == " Quản Lý Báo Cáo Ca Trực":
-    st.markdown('<div class="section-caption">LỊCH TRỰC VẬN HÀNH</div>', unsafe_allow_html=True)
-    
     # Lấy dữ liệu thật từ Database (Bảng: shift_reports)
     if db_connected:
         try:
@@ -101,6 +91,37 @@ if menu == " Quản Lý Báo Cáo Ca Trực":
         ]
     
     df = pd.DataFrame(data)
+    available_dates = []
+    if not df.empty and "ngay" in df:
+        parsed_dates = pd.to_datetime(df["ngay"], dayfirst=True, errors="coerce")
+        available_dates = sorted(parsed_dates.dropna().dt.strftime("%d/%m/%Y").unique(), reverse=True)
+
+    logo_path = Path(__file__).with_name("deocalogo.jpg")
+    logo_data = base64.b64encode(logo_path.read_bytes()).decode("ascii") if logo_path.exists() else ""
+    default_date = available_dates[0] if available_dates else "Tất cả ngày"
+    selected_date = st.session_state.get("selected_date", default_date)
+    if selected_date not in ["Tất cả ngày", *available_dates]:
+        selected_date = "Tất cả ngày"
+    display_date = selected_date if selected_date != "Tất cả ngày" else (available_dates[0] if available_dates else "Chưa có dữ liệu")
+
+    st.markdown(f"""
+    <header class="agency-header">
+        <img class="agency-logo" src="data:image/jpeg;base64,{logo_data}" alt="DEOCA GROUP">
+        <div class="agency-copy">
+            <h1>CÔNG TY CỔ PHẦN TẬP ĐOÀN ĐÈO CẢ</h1>
+            <p>LỊCH TRỰC CÔNG TÁC QUẢN LÝ VẬN HÀNH TPHCM - TL - MT</p>
+        </div>
+        <div class="print-box" aria-label="Trạng thái in"></div>
+    </header>
+    <div class="date-strip">CA TRỰC - NGÀY: {display_date}</div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-caption">LỊCH TRỰC VẬN HÀNH</div>', unsafe_allow_html=True)
+    filter_options = ["Tất cả ngày", *available_dates]
+    selected_date = st.selectbox("Tìm ngày ca trực", filter_options, index=filter_options.index(selected_date), key="selected_date")
+    if selected_date != "Tất cả ngày" and not df.empty:
+        df = df[pd.to_datetime(df["ngay"], dayfirst=True, errors="coerce").dt.strftime("%d/%m/%Y") == selected_date]
+
     if not df.empty:
         def column_or_blank(name):
             if name in df:
