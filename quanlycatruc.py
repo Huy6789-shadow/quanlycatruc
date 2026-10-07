@@ -107,6 +107,19 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
         white-space:normal !important;
         text-align:center !important;
     }
+    .schedule-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .schedule-table {
+        min-width:820px;
+        font-size:.68rem;
+        line-height:1.2;
+    }
+    .schedule-table th,
+    .schedule-table td {
+        padding:.3rem .35rem;
+        white-space:nowrap;
+    }
+    .schedule-table th { font-size:.64rem; }
+    .schedule-table td { font-size:.68rem; }
 }
 </style>
 """, unsafe_allow_html=True)
