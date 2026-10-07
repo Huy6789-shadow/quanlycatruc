@@ -17,6 +17,13 @@ st.markdown("""
 .stApp { background:#f7f4df; color:#414141; font-family:'Roboto Condensed','Arial Narrow',Arial,sans-serif; width:100%; overflow-x:hidden; }
 .block-container { width:100%; max-width:1440px; box-sizing:border-box; margin:0 auto; padding:.5rem clamp(.3rem,1vw,.75rem) 2rem; }
 [data-testid="stHeader"] { background:transparent; }
+/* Ẩn các nút quảng bá/deploy của Streamlit nhưng giữ nút mở sidebar và khu vực đăng nhập. */
+[data-testid="stToolbarActions"],
+[data-testid="stMainMenu"],
+[data-testid="stAppDeployButton"],
+[data-testid="stHeader"] button[data-testid="stBaseButton-header"]:has(span) {
+    display:none !important;
+}
 .stSidebar, [data-testid="stSidebar"] { width:300px !important; }
 [data-testid="stSidebar"] > div:first-child { width:300px !important; }
 .agency-header { background:var(--paper); border-bottom:4px solid #edcf62; min-height:112px; display:grid; grid-template-columns:minmax(180px,25%) minmax(0,50%) minmax(0,25%); align-items:center; gap:1rem; padding:.45rem 1rem; }
