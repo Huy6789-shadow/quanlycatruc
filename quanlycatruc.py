@@ -2,6 +2,33 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
+st.set_page_config(page_title="Lịch trực công tác quản lý vận hành", layout="wide", initial_sidebar_state="collapsed")
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700&display=swap');
+:root { --navy:#142b78; --red:#c62f2f; --line:#d8d8d8; --paper:#fffef8; }
+.stApp { background:#f7f4df; color:#414141; font-family:'Roboto Condensed','Arial Narrow',Arial,sans-serif; }
+.block-container { max-width:1440px; padding:.5rem .35rem 2rem; }
+[data-testid="stHeader"] { background:transparent; }
+.agency-header { background:var(--paper); border-bottom:4px solid #edcf62; min-height:106px; display:flex; align-items:center; gap:1rem; padding:.35rem 1rem; }
+.agency-mark { width:185px; flex:0 0 185px; color:var(--navy); font-family:Arial,sans-serif; font-weight:700; font-size:2rem; line-height:.82; letter-spacing:-2px; }
+.agency-mark small { display:block; margin-top:.4rem; font-size:.55rem; letter-spacing:3px; }
+.agency-copy { flex:1; text-align:center; }
+.agency-copy h1 { color:var(--navy); font-size:clamp(1.2rem,2.4vw,2.1rem); line-height:1.1; margin:0; font-weight:700; }
+.agency-copy p { color:var(--red); font-weight:700; font-size:clamp(.85rem,1.6vw,1.35rem); margin:.55rem 0 0; }
+.print-box { width:28px; height:28px; border:1px solid #888; background:#fff; align-self:flex-start; margin:1.5rem .4rem 0 0; }
+.date-strip { background:#fff; border:1px solid #eadb98; color:var(--red); text-align:center; font-weight:700; font-size:1.2rem; padding:.45rem .5rem; margin:.6rem 0; }
+.section-caption { background:#fff; border:1px solid var(--line); color:var(--red); font-weight:700; text-align:center; padding:.55rem; margin-top:.25rem; }
+.stTabs [data-baseweb="tab-list"] { gap:0; background:#e5ebf0; border:1px solid var(--line); }
+.stTabs [data-baseweb="tab"] { flex:1; justify-content:center; border-right:1px solid #fff; color:#222; font-weight:700; padding:.65rem; }
+.stTabs [aria-selected="true"] { background:#fff; color:var(--red); }
+.stDataFrame { background:#fff; }
+.admin-panel { background:#fff; border-top:3px solid var(--navy); padding:.75rem; margin-top:1rem; }
+@media (max-width:650px) { .agency-header{min-height:84px;padding:.25rem;gap:.4rem;} .agency-mark{width:105px;flex-basis:105px;font-size:1.35rem;} .agency-mark small{font-size:.38rem;letter-spacing:1px;} .agency-copy p{font-size:.7rem;} .print-box{display:none;} .date-strip{font-size:.85rem;} }
+</style>
+""", unsafe_allow_html=True)
+
 # Kết nối an toàn thông qua st.secrets
 @st.cache_resource
 def init_connection():
@@ -14,8 +41,6 @@ try:
 except Exception as e:
     st.error("Không thể kết nối cơ sở dữ liệu. Vui lòng kiểm tra lại cấu hình!")
     db_connected = False
-
-st.set_page_config(page_title="Phần Mềm Quản Lý Vận Hành Cao Tốc", layout="wide")
 
 # --- QUẢN LÝ PHÂN QUYỀN ADMIN ---
 if "is_admin" not in st.session_state:
@@ -46,12 +71,21 @@ else:
         st.session_state.is_admin = False
         st.rerun()
 
-st.title(" QUẢN LÝ VẬN HÀNH CA TRỰC")
-st.markdown("---")
+st.markdown("""
+<header class="agency-header">
+    <div class="agency-mark">DEOCA<small>GROUP</small></div>
+    <div class="agency-copy">
+        <h1>CÔNG TY CỔ PHẦN TẬP ĐOÀN ĐÈO CẢ</h1>
+        <p>LỊCH TRỰC CÔNG TÁC QUẢN LÝ VẬN HÀNH TPHCM - TL - MT</p>
+    </div>
+    <div class="print-box" aria-label="Trạng thái in"></div>
+</header>
+<div class="date-strip"> CA: 1 - NGÀY: 26/01/2023</div>
+""", unsafe_allow_html=True)
 
 # ==================== 1. QUẢN LÝ BÁO CÁO CA TRỰC ====================
 if menu == " Quản Lý Báo Cáo Ca Trực":
-    st.subheader(" Danh Sách Báo Cáo Ca Trực")
+    st.markdown('<div class="section-caption">LỊCH TRỰC VẬN HÀNH</div>', unsafe_allow_html=True)
     
     # Lấy dữ liệu thật từ Database (Bảng: shift_reports)
     if db_connected:
@@ -68,9 +102,29 @@ if menu == " Quản Lý Báo Cáo Ca Trực":
     
     df = pd.DataFrame(data)
     if not df.empty:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        def column_or_blank(name):
+            if name in df:
+                return df[name].fillna("")
+            return pd.Series([""] * len(df), index=df.index)
+
+        schedule = pd.DataFrame({
+            "STT": range(1, len(df) + 1),
+            "VỊ TRÍ": column_or_blank("vi_tri"),
+            "HỌ VÀ TÊN": column_or_blank("ho_ten"),
+            "ĐIỆN THOẠI": column_or_blank("sdt"),
+            "GHI CHÚ": column_or_blank("noi_dung"),
+        })
+        st.dataframe(schedule, use_container_width=True, hide_index=True, height=440)
     else:
         st.info("Chưa có dữ liệu báo cáo trong hệ thống.")
+
+    plan_tab, work_tab, schedule_tab = st.tabs(["CA TRỰC VẬN HÀNH", "KẾ HOẠCH CÔNG VIỆC", "LỊCH TRỰC"])
+    with plan_tab:
+        st.caption("Danh sách nhân sự và vị trí đang trực trong ca hiện tại.")
+    with work_tab:
+        st.caption("Các công việc quan trọng được phân công trong ngày.")
+    with schedule_tab:
+        st.caption("Theo dõi lịch trực theo từng ca vận hành.")
 
     # NẾU LÀ ADMIN THÌ ĐƯỢC THÊM / SỬA / XÓA THẬT
     if st.session_state.is_admin:
