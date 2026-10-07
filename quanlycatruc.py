@@ -16,12 +16,11 @@ st.markdown("""
 [data-testid="stHeader"] { background:transparent; }
 .stSidebar, [data-testid="stSidebar"] { width:300px !important; }
 [data-testid="stSidebar"] > div:first-child { width:300px !important; }
-.agency-header { background:var(--paper); border-bottom:4px solid #edcf62; min-height:112px; display:grid; grid-template-columns:minmax(180px,28%) minmax(0,1fr) 44px; align-items:center; gap:1rem; padding:.45rem 1rem; }
+.agency-header { background:var(--paper); border-bottom:4px solid #edcf62; min-height:112px; display:grid; grid-template-columns:minmax(180px,28%) minmax(0,1fr); align-items:center; gap:1rem; padding:.45rem 1rem; }
 .agency-logo { display:block; width:100%; max-width:245px; height:94px; object-fit:contain; object-position:left center; }
 .agency-copy { flex:1; text-align:center; }
 .agency-copy h1 { color:var(--navy); font-size:clamp(1rem,2.1vw,1.9rem); line-height:1.1; margin:0; font-weight:700; text-wrap:balance; }
 .agency-copy p { color:var(--red); font-weight:700; font-size:clamp(.75rem,1.25vw,1.2rem); line-height:1.15; margin:.55rem 0 0; text-wrap:balance; }
-.print-box { width:28px; height:28px; border:1px solid #888; background:#fff; justify-self:end; align-self:start; margin:.8rem .1rem 0 0; }
 .date-strip { background:#fff; border:1px solid #eadb98; color:var(--red); text-align:center; font-weight:700; font-size:1.2rem; padding:.45rem .5rem; margin:.6rem 0; }
 .section-caption { background:#fff; border:1px solid var(--line); color:var(--red); font-weight:700; text-align:center; padding:.55rem; margin-top:.25rem; }
 .stTabs [data-baseweb="tab-list"] { gap:0; background:#e5ebf0; border:1px solid var(--line); }
@@ -33,11 +32,11 @@ st.markdown("""
     .stSidebar, [data-testid="stSidebar"] { width:85vw !important; max-width:300px !important; }
     [data-testid="stSidebar"] > div:first-child { width:85vw !important; max-width:300px !important; }
     .block-container { padding:.25rem .3rem 1.25rem; }
-    .agency-header { min-height:92px; grid-template-columns:108px minmax(0,1fr) 0; padding:.25rem .35rem; gap:.35rem; }
-    .agency-logo { height:78px; max-width:108px; }
-    .agency-copy h1 { font-size:clamp(.86rem,4.2vw,1.15rem); line-height:1.08; }
-    .agency-copy p { font-size:clamp(.58rem,2.8vw,.72rem); line-height:1.12; margin-top:.35rem; }
-    .print-box { display:none; }
+    .agency-header { min-height:0; display:flex; flex-direction:column; justify-content:center; padding:.5rem .35rem .6rem; gap:.2rem; }
+    .agency-logo { width:150px; height:70px; max-width:150px; object-position:center; }
+    .agency-copy { width:100%; text-align:center; }
+    .agency-copy h1 { font-size:clamp(.95rem,4.6vw,1.2rem); line-height:1.08; text-align:center; }
+    .agency-copy p { font-size:clamp(.62rem,2.9vw,.76rem); line-height:1.12; margin:.35rem auto 0; text-align:center; max-width:330px; }
     .date-strip { font-size:.78rem; padding:.42rem .25rem; margin:.4rem 0; }
     .section-caption { font-size:.9rem; padding:.5rem .25rem; }
     .stTabs [data-baseweb="tab"] { font-size:.62rem; line-height:1.1; padding:.55rem .18rem; white-space:normal; text-align:center; }
@@ -123,7 +122,6 @@ if menu == " Quản Lý Báo Cáo Ca Trực":
             <h1>CÔNG TY CỔ PHẦN TẬP ĐOÀN ĐÈO CẢ</h1>
             <p>LỊCH TRỰC CÔNG TÁC QUẢN LÝ VẬN HÀNH TPHCM - TL - MT</p>
         </div>
-        <div class="print-box" aria-label="Trạng thái in"></div>
     </header>
     <div class="date-strip">CA TRỰC - NGÀY: {display_date}</div>
     """, unsafe_allow_html=True)
