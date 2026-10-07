@@ -26,14 +26,29 @@ st.markdown("""
 .agency-copy p { color:var(--red); font-weight:700; font-size:clamp(.95rem,1.8vw,1.6rem); line-height:1.15; letter-spacing:.01em; margin:.55rem 0 0; text-wrap:balance; }
 .date-strip { background:#fff; border:1px solid #eadb98; color:var(--red); text-align:center; font-weight:700; font-size:1.2rem; padding:.45rem .5rem; margin:.6rem 0; }
 .section-caption { background:#fff; border:1px solid var(--line); color:var(--red); font-weight:700; text-align:center; padding:.55rem; margin-top:.25rem; }
-/* Xóa khoảng cách (gap) giữa các ô Tab để chúng dính sát vào nhau */
-div[role="tablist"] {
-    gap: 0 !important;
+/* Dùng nhiều selector để tương thích các phiên bản Streamlit Cloud khác nhau. */
+div[role="tablist"],
+div[data-baseweb="tab-list"] {
+    display:flex !important;
+    width:100% !important;
+    gap:0 !important;
+    overflow-x:auto !important;
 }
 
-/* Tùy chỉnh thiết kế cơ bản cho từng ô Tab */
-button[data-testid="stTab"] { 
+div[role="tablist"] > div,
+div[data-baseweb="tab-list"] > div {
+    flex:1 1 0 !important;
+    min-width:0 !important;
+}
+
+button[data-testid="stTab"],
+button[data-baseweb="tab"],
+div[role="tablist"] button[role="tab"],
+div[role="tablist"] > div[role="tab"],
+div[data-baseweb="tab-list"] [role="tab"] { 
     flex: 1 1 0 !important; 
+    min-width:0 !important;
+    display:flex !important;
     justify-content: center !important; 
     background: #e5ebf0 !important; 
     border: 1px solid var(--line) !important; /* Tạo viền xám mỏng bao quanh */
@@ -45,12 +60,20 @@ button[data-testid="stTab"] {
 }
 
 /* Xóa viền bên trái của các tab (trừ tab đầu tiên) để tránh bị nét đôi khi xếp sát nhau */
-button[data-testid="stTab"]:not(:first-child) {
+button[data-testid="stTab"]:not(:first-child),
+button[data-baseweb="tab"]:not(:first-child),
+div[role="tablist"] button[role="tab"]:not(:first-child),
+div[role="tablist"] > div[role="tab"]:not(:first-child),
+div[data-baseweb="tab-list"] [role="tab"]:not(:first-child) {
     border-left: none !important;
 }
 
 /* Tùy chỉnh nút Tab đang được chọn (Active) */
-button[data-testid="stTab"][aria-selected="true"] { 
+button[data-testid="stTab"][aria-selected="true"],
+button[data-baseweb="tab"][aria-selected="true"],
+div[role="tablist"] button[role="tab"][aria-selected="true"],
+div[role="tablist"] > div[role="tab"][aria-selected="true"],
+div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] { 
     background: #fff !important; 
     color: var(--red) !important; 
     border-bottom: 2px solid var(--red) !important; /* Chỉ tạo gạch đỏ nhẹ ở dưới */
@@ -74,7 +97,16 @@ button[data-testid="stTab"][aria-selected="true"] {
     .agency-copy p { font-size:clamp(.78rem,3.5vw,.95rem); line-height:1.12; margin:.35rem auto 0; text-align:center; max-width:360px; }
     .date-strip { font-size:.78rem; padding:.42rem .25rem; margin:.4rem 0; }
     .section-caption { font-size:.9rem; padding:.5rem .25rem; }
-    .stTabs [data-baseweb="tab"] { font-size:.62rem; line-height:1.1; padding:.55rem .18rem; white-space:normal; text-align:center; }
+    div[role="tablist"] button[role="tab"],
+    div[role="tablist"] > div[role="tab"],
+    div[data-baseweb="tab-list"] button[data-baseweb="tab"],
+    div[data-baseweb="tab-list"] [role="tab"] {
+        font-size:.62rem !important;
+        line-height:1.1 !important;
+        padding:.55rem .18rem !important;
+        white-space:normal !important;
+        text-align:center !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
