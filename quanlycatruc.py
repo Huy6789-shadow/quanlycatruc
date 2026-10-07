@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
-st.set_page_config(page_title="Lịch trực công tác quản lý vận hành", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Quản lý vận hành", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
@@ -26,11 +26,36 @@ st.markdown("""
 .agency-copy p { color:var(--red); font-weight:700; font-size:clamp(.95rem,1.8vw,1.6rem); line-height:1.15; letter-spacing:.01em; margin:.55rem 0 0; text-wrap:balance; }
 .date-strip { background:#fff; border:1px solid #eadb98; color:var(--red); text-align:center; font-weight:700; font-size:1.2rem; padding:.45rem .5rem; margin:.6rem 0; }
 .section-caption { background:#fff; border:1px solid var(--line); color:var(--red); font-weight:700; text-align:center; padding:.55rem; margin-top:.25rem; }
-.stTabs { width:100%; }
-.stTabs [data-baseweb="tab-list"] { display:flex; width:100%; gap:0; background:#e5ebf0; border:1px solid var(--line); }
-.stTabs [data-baseweb="tab-list"] > div { flex:1 1 0; min-width:0; }
-.stTabs [data-baseweb="tab"] { width:100%; justify-content:center; border-right:1px solid #fff; color:#222; font-weight:700; padding:.65rem; box-sizing:border-box; }
-.stTabs [aria-selected="true"] { background:#fff; color:var(--red); }
+/* Xóa khoảng cách (gap) giữa các ô Tab để chúng dính sát vào nhau */
+div[role="tablist"] {
+    gap: 0 !important;
+}
+
+/* Tùy chỉnh thiết kế cơ bản cho từng ô Tab */
+button[data-testid="stTab"] { 
+    flex: 1 1 0 !important; 
+    justify-content: center !important; 
+    background: #e5ebf0 !important; 
+    border: 1px solid var(--line) !important; /* Tạo viền xám mỏng bao quanh */
+    border-radius: 0 !important; 
+    color: #222 !important; 
+    font-weight: 700 !important; 
+    padding: 0.65rem !important; 
+    margin: 0 !important; 
+}
+
+/* Xóa viền bên trái của các tab (trừ tab đầu tiên) để tránh bị nét đôi khi xếp sát nhau */
+button[data-testid="stTab"]:not(:first-child) {
+    border-left: none !important;
+}
+
+/* Tùy chỉnh nút Tab đang được chọn (Active) */
+button[data-testid="stTab"][aria-selected="true"] { 
+    background: #fff !important; 
+    color: var(--red) !important; 
+    border-bottom: 2px solid var(--red) !important; /* Chỉ tạo gạch đỏ nhẹ ở dưới */
+    box-shadow: none !important; /* Xóa bỏ vạch đỏ mập ở phía trên */
+}
 .stDataFrame { background:#fff; }
 .schedule-table-wrap { width:100%; overflow-x:auto; margin:.4rem 0 1rem; }
 .schedule-table { width:100%; border-collapse:collapse; background:#fff; color:#111; font-size:.9rem; }
@@ -76,7 +101,7 @@ def render_agency_header(display_date):
         <img class="agency-logo" src="data:image/jpeg;base64,{logo_data}" alt="DEOCA GROUP">
         <div class="agency-copy">
             <h1>CÔNG TY CỔ PHẦN TẬP ĐOÀN ĐÈO CẢ</h1>
-            <p>LỊCH TRỰC CÔNG TÁC QUẢN LÝ VẬN HÀNH TPHCM - TL - MT</p>
+            <p>QUẢN LÝ VẬN HÀNH CAO TỐC TPHCM - TL - MT</p>
         </div>
     </header>
     <div class="date-strip"> NGÀY: {display_date}</div>
@@ -94,10 +119,10 @@ menu = st.sidebar.selectbox("Chức năng", [
 ])
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Quyền Quản Trị")
+st.sidebar.subheader("Quản trị")
 if not st.session_state.is_admin:
     with st.sidebar.form("login"):
-        pwd = st.text_input("Mật khẩu Admin", type="password")
+        pwd = st.text_input("Mật khẩu", type="password")
         if st.form_submit_button("Đăng nhập"):
             if pwd == "admin123":
                 st.session_state.is_admin = True
@@ -138,7 +163,7 @@ if menu == " Báo Cáo Ca Trực":
     render_agency_header(display_date)
 
     st.markdown('<div class="section-caption">LỊCH TRỰC VẬN HÀNH</div>', unsafe_allow_html=True)
-    selected_date = st.date_input("Tìm ngày ca trực", value=selected_date, format="DD/MM/YYYY", key="selected_date")
+    selected_date = st.date_input("Tìm ngày", value=selected_date, format="DD/MM/YYYY", key="selected_date")
     if not df.empty:
         df = df[pd.to_datetime(df["ngay"], dayfirst=True, errors="coerce").dt.date == selected_date]
 
@@ -215,9 +240,9 @@ if menu == " Báo Cáo Ca Trực":
     # NẾU LÀ ADMIN THÌ ĐƯỢC THÊM / SỬA / XÓA THẬT
     if st.session_state.is_admin:
         st.markdown("---")
-        st.info("⚙️ **Khu vực thao tác dành cho Admin (Thêm / Sửa / Xóa trực tiếp vào Database)**")
+        st.info("**Khu vực thao tác dành cho Admin (Thêm / Sửa / Xóa trực tiếp vào Database)**")
         
-        tab1, tab2 = st.tabs(["➕ Thêm báo cáo mới", "✏️ Sửa / Xóa báo cáo"])
+        tab1, tab2 = st.tabs(["Thêm báo cáo mới", "Sửa / Xóa báo cáo"])
         
         with tab1:
             role_options = [
@@ -302,7 +327,7 @@ if menu == " Báo Cáo Ca Trực":
                     person_names.append(person_name)
                     person_phones.append(person_phone)
 
-                r_noidung = st.text_area("Nội dung công việc chung", key="add_group_work")
+                r_noidung = st.text_area("Nội dung công việc", key="add_group_work")
                 if add_errors.get("noi_dung"):
                     st.error(add_errors["noi_dung"])
                 r_hoten = "\n".join(person_names)
@@ -345,7 +370,7 @@ if menu == " Báo Cáo Ca Trực":
                             st.success("Đã thêm dữ liệu thành công vào Database!")
                             st.rerun()
                     else:
-                        st.warning("Vui lòng cấu hình kết nối Supabase để lưu trữ thật.")
+                        st.warning("Vui lòng cấu hình kết nối Supabase để lưu trữ.")
 
         with tab2:
             if data:
@@ -377,12 +402,12 @@ if menu == " Báo Cáo Ca Trực":
 # ==================== 2. QUẢN LÝ PHƯƠNG TIỆN ====================
 elif menu == " Phương Tiện":
     render_agency_header(date.today().strftime("%d/%m/%Y"))
-    st.subheader(" Quản Lý Trạng Thái Phương Tiện & Xe Tuần Tra")
+    st.subheader(" Quản lý trạng thái phương tiện & Xe Tuần Tra")
     # Tương tự cấu trúc bảng vehicles trên Database
     st.info("Khu vực quản lý danh sách xe, biển số và trạng thái hoạt động thực tế.")
 
 # ==================== 3. QUẢN LÝ NHIÊN LIỆU ====================
 elif menu == " Nhiên Liệu":
     render_agency_header(date.today().strftime("%d/%m/%Y"))
-    st.subheader(" Quản Lý Cấp Phát Nhiên Liệu Xe")
+    st.subheader(" Quản lý cấp phát nhiên liệu cho xe")
     st.info("Khu vực theo dõi số lít xăng/dầu và chi phí cấp phát cho từng xe.")
