@@ -15,7 +15,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700&display=swap');
 :root { --navy:#142b78; --red:#c62f2f; --line:#d8d8d8; --paper:#fffef8; }
 .stApp { background:#f7f4df; color:#414141; font-family:'Roboto Condensed','Arial Narrow',Arial,sans-serif; width:100%; overflow-x:hidden; }
-.block-container { width:100%; max-width:1440px; box-sizing:border-box; margin:0 auto; padding:.5rem clamp(.3rem,1vw,.75rem) 2rem; }
+.block-container { width:100%; max-width:none; box-sizing:border-box; margin:0; padding:.5rem clamp(.3rem,1vw,.75rem) 2rem; }
 [data-testid="stHeader"] { background:transparent; }
 /* Ẩn các nút quảng bá/deploy của Streamlit nhưng giữ nút mở sidebar và khu vực đăng nhập. */
 [data-testid="stToolbarActions"],
@@ -24,15 +24,38 @@ st.markdown("""
 [data-testid="stHeader"] button[data-testid="stBaseButton-header"]:has(span) {
     display:none !important;
 }
-.stSidebar, [data-testid="stSidebar"] { width:300px !important; }
-[data-testid="stSidebar"] > div:first-child { width:300px !important; }
+.stSidebar, [data-testid="stSidebar"] { display:none !important; }
 .agency-header { background:var(--paper); border-bottom:4px solid #edcf62; min-height:112px; display:grid; grid-template-columns:minmax(180px,25%) minmax(0,50%) minmax(0,25%); align-items:center; gap:1rem; padding:.45rem 1rem; }
 .agency-logo { display:block; width:100%; max-width:245px; height:94px; object-fit:contain; object-position:left center; }
 .agency-copy { grid-column:2; min-width:0; text-align:center; }
-.agency-copy h1 { color:var(--navy); font-size:clamp(1.15rem,2.5vw,2.3rem); line-height:1.1; margin:0; font-weight:700; text-wrap:balance; }
-.agency-copy p { color:var(--red); font-weight:700; font-size:clamp(.95rem,1.8vw,1.6rem); line-height:1.15; letter-spacing:.01em; margin:.55rem 0 0; text-wrap:balance; }
+.agency-copy h1 { color:var(--navy); font-size:clamp(1.25rem,2.8vw,2.65rem); line-height:1.05; margin:0; font-weight:700; text-wrap:balance; }
+.agency-copy p { color:var(--red); font-weight:700; font-size:clamp(1rem,2.1vw,1.75rem); line-height:1.05; letter-spacing:.01em; margin:.25rem 0 0; text-wrap:balance; }
 .date-strip { background:#fff; border:1px solid #eadb98; color:var(--red); text-align:center; font-weight:700; font-size:1.2rem; padding:.45rem .5rem; margin:.6rem 0; }
 .section-caption { background:#fff; border:1px solid var(--line); color:var(--red); font-weight:700; text-align:center; padding:.55rem; margin-top:.25rem; }
+.main-navigation { margin:.55rem 0 .8rem; display:flex; align-items:center; min-height:2.65rem; }
+[data-testid="stRadio"] { width:100% !important; }
+[data-testid="stElementContainer"]:has(> div[data-testid="stRadio"]) { width:100% !important; }
+[data-testid="stRadioGroup"] {
+    display:flex !important; flex-wrap:nowrap !important; align-items:center !important;
+    gap:.35rem !important; width:100% !important;
+}
+[data-testid="stRadioOption"] {
+    flex:0 1 auto !important; width:auto !important; min-height:2.65rem;
+    display:flex !important; align-items:center !important; justify-content:center;
+    background:#fff;
+    border:1px solid #d9d9d9; border-radius:.375rem; color:#414141; font-weight:400;
+    padding:.3rem .65rem; text-align:center; box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+[data-testid="stRadioOption"][data-selected="true"] {
+    background:#fff; color:var(--red); border-color:#d9d9d9; box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+[data-testid="stRadioOption"] > div { display:flex !important; align-items:center !important; }
+[data-testid="stRadioOption"] > div > div:first-child { display:none !important; }
+.login-toolbar { display:flex; justify-content:flex-end; align-items:center; min-height:2.65rem; margin:.55rem 0 .8rem; }
+.login-toolbar [data-testid="stButton"] { width:auto !important; }
+.login-toolbar button { width:auto !important; color:var(--navy); font-weight:700; padding:.3rem .65rem; white-space:nowrap; }
+[data-testid="stColumn"]:has(.login-toolbar) [data-testid="stButton"] { margin-left:auto !important; }
+[data-testid="stColumn"]:has(.login-toolbar) > [data-testid="stVerticalBlock"] { align-items:flex-end !important; }
 /* Dùng nhiều selector để tương thích các phiên bản Streamlit Cloud khác nhau. */
 div[role="tablist"],
 div[data-baseweb="tab-list"] {
@@ -94,16 +117,26 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
 .schedule-table td { background:#fff; color:#111; line-height:1.45; }
 .admin-panel { background:#fff; border-top:3px solid var(--navy); padding:.75rem; margin-top:1rem; }
 @media (max-width:650px) {
-    .stSidebar, [data-testid="stSidebar"] { width:85vw !important; max-width:300px !important; }
-    [data-testid="stSidebar"] > div:first-child { width:85vw !important; max-width:300px !important; }
     .block-container { padding:.25rem .3rem 1.25rem; }
-    .agency-header { min-height:0; display:flex; flex-direction:column; justify-content:center; padding:.5rem .35rem .6rem; gap:.2rem; }
-    .agency-logo { order:1; width:150px; height:70px; max-width:150px; object-position:center; }
-    .agency-copy { order:2; grid-column:auto; width:100%; text-align:center; }
-    .agency-copy h1 { font-size:clamp(1.15rem,5.5vw,1.55rem); line-height:1.08; text-align:center; }
-    .agency-copy p { font-size:clamp(.78rem,3.5vw,.95rem); line-height:1.12; margin:.35rem auto 0; text-align:center; max-width:360px; }
+    .agency-header { position:relative; min-height:78px; display:block; padding:.45rem .25rem .5rem; }
+    .agency-logo { position:absolute; top:.45rem; left:.3rem; z-index:1; width:52px; height:38px; max-width:52px; object-position:left center; }
+    .agency-copy { display:block; width:100%; margin:0; padding:0 .1rem; text-align:center; }
+    .agency-copy h1 { font-size:.9rem; line-height:1; white-space:nowrap; text-align:center; }
+    .agency-copy p { font-size:.78rem; line-height:1; margin:.12rem auto 0; text-align:center; white-space:nowrap; }
     .date-strip { font-size:.78rem; padding:.42rem .25rem; margin:.4rem 0; }
     .section-caption { font-size:.9rem; padding:.5rem .25rem; }
+    [data-testid="stHorizontalBlock"]:has(.main-navigation) {
+        display:flex !important; flex-wrap:nowrap !important; align-items:center !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.main-navigation) > [data-testid="stColumn"]:first-child {
+        flex:1 1 0 !important; width:calc(100% - 100px) !important; min-width:0 !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.main-navigation) > [data-testid="stColumn"]:last-child {
+        flex:0 0 100px !important; width:100px !important; min-width:100px !important;
+    }
+    [data-testid="stRadioOption"] {
+        min-height:2.35rem; font-size:.68rem; line-height:1.1; padding:.4rem .3rem;
+    }
     div[role="tablist"] button[role="tab"],
     div[role="tablist"] > div[role="tab"],
     div[data-baseweb="tab-list"] button[data-baseweb="tab"],
@@ -162,33 +195,149 @@ def render_agency_header(display_date):
 # --- QUẢN LÝ PHÂN QUYỀN ADMIN ---
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
+if "logged_in_user" not in st.session_state:
+    st.session_state.logged_in_user = None
+if "tab_accounts" not in st.session_state:
+    st.session_state.tab_accounts = {
+        "Báo Cáo Ca Trực": {"username": "tab1", "password": "123"},
+        "Phương Tiện": {"username": "tab2", "password": "123"},
+        "Nhiên Liệu": {"username": "tab3", "password": "123"},
+    }
 
-st.sidebar.title(" Quản Lý Vận Hành")
-menu = st.sidebar.selectbox("Chức năng", [
-    " Báo Cáo Ca Trực", 
-    " Phương Tiện", 
-    " Nhiên Liệu"
-])
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Quản trị")
-if not st.session_state.is_admin:
-    with st.sidebar.form("login"):
+@st.dialog("Đăng nhập")
+def show_login_dialog(target_menu):
+    with st.form("login"):
+        username = st.text_input("Tên đăng nhập")
         pwd = st.text_input("Mật khẩu", type="password")
         if st.form_submit_button("Đăng nhập"):
-            if pwd == "admin123":
-                st.session_state.is_admin = True
+            account = st.session_state.tab_accounts.get(target_menu, {})
+            is_admin_login = username.strip() == "admin" and pwd == "admin123"
+            is_tab_login = (
+                username.strip() == account.get("username")
+                and pwd == account.get("password")
+            )
+            if is_admin_login or is_tab_login:
+                st.session_state.is_admin = is_admin_login
+                st.session_state.logged_in_user = "admin" if is_admin_login else username.strip()
                 st.rerun()
             else:
-                st.sidebar.error("Sai mật khẩu!")
-else:
-    st.sidebar.success("Đang đăng nhập: **ADMIN**")
-    if st.sidebar.button("Đăng xuất"):
-        st.session_state.is_admin = False
-        st.rerun()
+                st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+
+header_date = st.session_state.get("selected_date", date.today())
+if isinstance(header_date, str):
+    parsed_header_date = pd.to_datetime(header_date, dayfirst=True, errors="coerce")
+    header_date = parsed_header_date.date() if pd.notna(parsed_header_date) else date.today()
+render_agency_header(header_date.strftime("%d/%m/%Y"))
+
+menu_column, login_column = st.columns([4, 1], gap="small")
+with menu_column:
+    st.markdown('<div class="main-navigation">', unsafe_allow_html=True)
+    menu = st.radio(
+        "Chức năng",
+        ["Báo Cáo Ca Trực", "Phương Tiện", "Nhiên Liệu"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="main_navigation",
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with login_column:
+    st.markdown('<div class="login-toolbar">', unsafe_allow_html=True)
+    if st.session_state.is_admin:
+        if st.button("ADMIN · Đăng xuất", key="logout"):
+            st.session_state.is_admin = False
+            st.session_state.logged_in_user = None
+            st.rerun()
+    elif st.session_state.logged_in_user:
+        if st.button(f"{st.session_state.logged_in_user} · Đăng xuất", key="logout"):
+            st.session_state.logged_in_user = None
+            st.rerun()
+    else:
+        if st.button("Đăng nhập", key="open-login"):
+            show_login_dialog(menu)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+if st.session_state.is_admin:
+    with st.expander("Quản lý tài khoản"):
+        manage_tab, add_tab = st.tabs(["Sửa / Xóa tài khoản", "Thêm tài khoản"])
+        with manage_tab:
+            account_menu = st.selectbox(
+                "Tab cần quản lý",
+                list(st.session_state.tab_accounts),
+                key="account_menu",
+            )
+            account = st.session_state.tab_accounts[account_menu]
+            with st.form("account_management"):
+                edited_username = st.text_input("Tên đăng nhập", value=account["username"])
+                edited_password = st.text_input("Mật khẩu", value=account["password"], type="password")
+                save_account, delete_account = st.columns(2)
+                with save_account:
+                    save_clicked = st.form_submit_button("Lưu tài khoản")
+                with delete_account:
+                    delete_clicked = st.form_submit_button("Xóa tài khoản", type="secondary")
+                if save_clicked:
+                    username = edited_username.strip()
+                    duplicate = any(
+                        name != account_menu
+                        and values["username"] == username
+                        and username
+                        for name, values in st.session_state.tab_accounts.items()
+                    )
+                    if not username or not edited_password:
+                        st.error("Tên đăng nhập và mật khẩu không được để trống.")
+                    elif duplicate:
+                        st.error("Tên đăng nhập đã được sử dụng cho tab khác.")
+                    else:
+                        st.session_state.tab_accounts[account_menu] = {
+                            "username": username,
+                            "password": edited_password,
+                        }
+                        st.success(f"Đã cập nhật tài khoản cho {account_menu}.")
+                        st.rerun()
+                if delete_clicked:
+                    st.session_state.tab_accounts[account_menu] = {"username": "", "password": ""}
+                    st.success(f"Đã xóa tài khoản của {account_menu}.")
+                    st.rerun()
+
+        with add_tab:
+            with st.form("add_account"):
+                new_account_menu = st.selectbox(
+                    "Tab cần cấp tài khoản",
+                    list(st.session_state.tab_accounts),
+                    key="new_account_menu",
+                )
+                new_username = st.text_input("Tên đăng nhập mới")
+                new_password = st.text_input("Mật khẩu mới", type="password")
+                add_clicked = st.form_submit_button("Thêm / Cấp lại tài khoản")
+                if add_clicked:
+                    username = new_username.strip()
+                    duplicate = any(
+                        values["username"] == username and username
+                        for values in st.session_state.tab_accounts.values()
+                    )
+                    if not username or not new_password:
+                        st.error("Tên đăng nhập và mật khẩu không được để trống.")
+                    elif duplicate:
+                        st.error("Tên đăng nhập đã được sử dụng cho tab khác.")
+                    else:
+                        st.session_state.tab_accounts[new_account_menu] = {
+                            "username": username,
+                            "password": new_password,
+                        }
+                        st.success(f"Đã cấp tài khoản cho {new_account_menu}.")
+                        st.rerun()
+
+selected_account = st.session_state.tab_accounts[menu]
+can_edit_tab = (
+    st.session_state.is_admin
+    or (
+        st.session_state.logged_in_user
+        and st.session_state.logged_in_user == selected_account["username"]
+    )
+)
 
 # ==================== 1. QUẢN LÝ BÁO CÁO CA TRỰC ====================
-if menu == " Báo Cáo Ca Trực":
+if menu == "Báo Cáo Ca Trực":
     # Lấy dữ liệu thật từ Database (Bảng: shift_reports)
     if db_connected:
         try:
@@ -203,17 +352,12 @@ if menu == " Báo Cáo Ca Trực":
         ]
     
     df = pd.DataFrame(data)
-    parsed_dates = pd.to_datetime(df["ngay"], dayfirst=True, errors="coerce") if "ngay" in df else pd.Series(dtype="datetime64[ns]")
-    latest_date = parsed_dates.max()
-    default_date = latest_date.date() if pd.notna(latest_date) else pd.Timestamp.today().date()
+    # Luôn mở lịch ở ngày hiện tại; nếu hôm nay chưa có dữ liệu, bảng sẽ để trống.
+    default_date = date.today()
     selected_date = st.session_state.get("selected_date", default_date)
     if isinstance(selected_date, str):
         selected_date = pd.to_datetime(selected_date, dayfirst=True, errors="coerce")
         selected_date = selected_date.date() if pd.notna(selected_date) else default_date
-    display_date = selected_date.strftime("%d/%m/%Y")
-
-    render_agency_header(display_date)
-
     st.markdown('<div class="section-caption">LỊCH TRỰC VẬN HÀNH</div>', unsafe_allow_html=True)
     selected_date = st.date_input("Tìm ngày", value=selected_date, format="DD/MM/YYYY", key="selected_date")
     if not df.empty:
@@ -289,10 +433,13 @@ if menu == " Báo Cáo Ca Trực":
         else:
             st.info("Chưa có dữ liệu nghỉ phép.")
 
-    # NẾU LÀ ADMIN THÌ ĐƯỢC THÊM / SỬA / XÓA THẬT
-    if st.session_state.is_admin:
+    # Chỉ Admin hoặc tài khoản được cấp cho tab này mới được thao tác dữ liệu.
+    if can_edit_tab:
         st.markdown("---")
-        st.info("**Khu vực thao tác dành cho Admin (Thêm / Sửa / Xóa trực tiếp vào Database)**")
+        if st.session_state.is_admin:
+            st.info("**Khu vực thao tác dành cho Admin (Thêm / Sửa / Xóa trực tiếp vào Database)**")
+        else:
+            st.info("**Khu vực thao tác dành cho tài khoản Báo Cáo Ca Trực**")
         
         tab1, tab2 = st.tabs(["Thêm báo cáo mới", "Sửa / Xóa báo cáo"])
         
@@ -452,14 +599,12 @@ if menu == " Báo Cáo Ca Trực":
                                 st.rerun()
 
 # ==================== 2. QUẢN LÝ PHƯƠNG TIỆN ====================
-elif menu == " Phương Tiện":
-    render_agency_header(date.today().strftime("%d/%m/%Y"))
-    st.subheader(" Quản lý trạng thái phương tiện & Xe Tuần Tra")
+elif menu == "Phương Tiện":
+    st.markdown('<div class="section-caption">QUẢN LÝ PHƯƠNG TIỆN</div>', unsafe_allow_html=True)
     # Tương tự cấu trúc bảng vehicles trên Database
     st.info("Khu vực quản lý danh sách xe, biển số và trạng thái hoạt động thực tế.")
 
 # ==================== 3. QUẢN LÝ NHIÊN LIỆU ====================
-elif menu == " Nhiên Liệu":
-    render_agency_header(date.today().strftime("%d/%m/%Y"))
-    st.subheader(" Quản lý cấp phát nhiên liệu cho xe")
+elif menu == "Nhiên Liệu":
+    st.markdown('<div class="section-caption">QUẢN LÝ NHIÊN LIỆU</div>', unsafe_allow_html=True)
     st.info("Khu vực theo dõi số lít xăng/dầu và chi phí cấp phát cho từng xe.")
