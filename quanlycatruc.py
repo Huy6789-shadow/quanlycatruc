@@ -1,10 +1,14 @@
 import base64
+import hashlib
+import hmac
 import html
+import json
 import re
 from datetime import date
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from supabase import create_client, Client
 
@@ -193,6 +197,58 @@ def render_agency_header(display_date):
     """, unsafe_allow_html=True)
 
 # --- QUẢN LÝ PHÂN QUYỀN ADMIN ---
+AUTH_COOKIE_NAME = "quanlycatruc_auth"
+
+
+def auth_cookie_secret():
+    return st.secrets.get("AUTH_COOKIE_SECRET") or st.secrets.get("SUPABASE_KEY", "")
+
+
+def signed_auth_value(username):
+    value = str(username)
+    signature = hmac.new(
+        auth_cookie_secret().encode("utf-8"),
+        value.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{value}.{signature}"
+
+
+def verified_auth_username(cookie_value):
+    if not cookie_value or "." not in cookie_value:
+        return None
+    username, signature = cookie_value.rsplit(".", 1)
+    expected = signed_auth_value(username).rsplit(".", 1)[1]
+    if hmac.compare_digest(signature, expected):
+        return username
+    return None
+
+
+def set_auth_cookie(username):
+    cookie_header = f"{AUTH_COOKIE_NAME}={signed_auth_value(username)}; path=/; SameSite=Lax"
+    components.html(
+        f"""
+        <script>
+        document.cookie = {json.dumps(cookie_header)};
+        </script>
+        """,
+        height=0,
+    )
+
+
+def clear_auth_cookie():
+    components.html(
+        f"""
+        <script>
+        document.cookie = {json.dumps(
+            f"{AUTH_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
+        )};
+        </script>
+        """,
+        height=0,
+    )
+
+
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 if "logged_in_user" not in st.session_state:
@@ -204,21 +260,34 @@ if "tab_accounts" not in st.session_state:
         "Nhiên Liệu": {"username": "tab3", "password": "123"},
     }
 
+if not st.session_state.logged_in_user:
+    saved_username = verified_auth_username(st.context.cookies.get(AUTH_COOKIE_NAME))
+    if saved_username == "admin":
+        st.session_state.is_admin = True
+        st.session_state.logged_in_user = "admin"
+    elif any(
+        saved_username == account.get("username") and account.get("username")
+        for account in st.session_state.tab_accounts.values()
+    ):
+        st.session_state.logged_in_user = saved_username
+
 @st.dialog("Đăng nhập")
-def show_login_dialog(target_menu):
+def show_login_dialog():
     with st.form("login"):
         username = st.text_input("Tên đăng nhập")
         pwd = st.text_input("Mật khẩu", type="password")
         if st.form_submit_button("Đăng nhập"):
-            account = st.session_state.tab_accounts.get(target_menu, {})
             is_admin_login = username.strip() == "admin" and pwd == "admin123"
-            is_tab_login = (
+            is_tab_login = any(
                 username.strip() == account.get("username")
                 and pwd == account.get("password")
+                and account.get("username")
+                for account in st.session_state.tab_accounts.values()
             )
             if is_admin_login or is_tab_login:
                 st.session_state.is_admin = is_admin_login
                 st.session_state.logged_in_user = "admin" if is_admin_login else username.strip()
+                set_auth_cookie(st.session_state.logged_in_user)
                 st.rerun()
             else:
                 st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
@@ -247,14 +316,16 @@ with login_column:
         if st.button("ADMIN · Đăng xuất", key="logout"):
             st.session_state.is_admin = False
             st.session_state.logged_in_user = None
+            clear_auth_cookie()
             st.rerun()
     elif st.session_state.logged_in_user:
         if st.button(f"{st.session_state.logged_in_user} · Đăng xuất", key="logout"):
             st.session_state.logged_in_user = None
+            clear_auth_cookie()
             st.rerun()
     else:
         if st.button("Đăng nhập", key="open-login"):
-            show_login_dialog(menu)
+            show_login_dialog()
     st.markdown("</div>", unsafe_allow_html=True)
 
 if st.session_state.is_admin:
@@ -601,8 +672,285 @@ if menu == "Báo Cáo Ca Trực":
 # ==================== 2. QUẢN LÝ PHƯƠNG TIỆN ====================
 elif menu == "Phương Tiện":
     st.markdown('<div class="section-caption">QUẢN LÝ PHƯƠNG TIỆN</div>', unsafe_allow_html=True)
-    # Tương tự cấu trúc bảng vehicles trên Database
-    st.info("Khu vực quản lý danh sách xe, biển số và trạng thái hoạt động thực tế.")
+    vehicle_types = {
+        "43H-021.35": "Xe tải thùng 3,5T",
+        "43C-262.53": "Xe quét rác",
+        "43C-270.17": "Xe cẩu thùng Hyundai",
+        "29K-086.84": "Xe bán tải",
+        "29K-213.98": "Xe bán tải",
+        "29B-428.01": "Xe cứu thương Transit",
+        "29K-292.08": "Xe quét rác",
+        "51M-722.40": "Xe chữa cháy",
+        "51M-679.34": "Xe stec nước",
+        "29K-214.46": "Xe bán tải",
+        "30B-402.28": "Xe bán tải",
+        "30B-402.00": "Xe bán tải",
+        "51E-041.51": "Xe chữa cháy",
+        "30B-456.83": "Xe tải Cabin kép",
+        "51K-061.29": "Xe tải thùng 3,5T",
+    }
+    vehicle_type_options = [
+        "",
+        "Xe tải thùng 3,5T",
+        "Xe quét rác",
+        "Xe cẩu thùng Hyundai",
+        "Xe bán tải",
+        "Xe cứu thương Transit",
+        "Xe chữa cháy",
+        "Xe stec nước",
+        "Xe tải Cabin kép",
+    ]
+    vehicle_statuses = ["Hoạt động bình thường", "Bảo dưỡng sửa chữa", "Hư hỏng"]
+    vehicle_locations = [
+        "BĐH CT MT-CT", "XN QLVH TL-MT", "BĐH CT HCM-TL",
+        "BĐH Đảm bảo ATGT",
+    ]
+
+    if "vehicle_reports" not in st.session_state:
+        st.session_state.vehicle_reports = []
+
+    vehicle_db_available = db_connected
+    if vehicle_db_available:
+        try:
+            vehicle_response = supabase.table("vehicles").select("*").execute()
+            vehicle_data = vehicle_response.data or []
+        except Exception as error:
+            vehicle_db_available = False
+            vehicle_data = []
+            if "PGRST205" in str(error) or "public.vehicles" in str(error):
+                st.warning("Chưa có bảng dữ liệu phương tiện trên Supabase. Vui lòng tạo bảng `vehicles` trước khi sử dụng lưu dữ liệu.")
+            else:
+                st.error(f"Không thể đọc dữ liệu phương tiện: {error}")
+    else:
+        vehicle_data = st.session_state.vehicle_reports
+        st.warning("Chưa cấu hình Supabase. Dữ liệu phương tiện hiện chỉ lưu trong phiên làm việc.")
+
+    vehicle_df = pd.DataFrame(vehicle_data)
+    for item in vehicle_data:
+        plate = str(item.get("bien_so", "")).strip()
+        vehicle_type = str(item.get("loai_xe", "")).strip()
+        if plate and vehicle_type:
+            vehicle_types.setdefault(plate, vehicle_type)
+    vehicle_display_df = vehicle_df.copy()
+    if not vehicle_display_df.empty:
+        for column in ("id", "ngay", "bien_so", "loai_xe", "tinh_trang", "vi_tri"):
+            if column not in vehicle_display_df:
+                vehicle_display_df[column] = ""
+        selected_vehicle_date = st.date_input(
+            "Tìm ngày", value=date.today(), format="DD/MM/YYYY",
+            key="vehicle_selected_date",
+        )
+        parsed_vehicle_dates = pd.to_datetime(
+            vehicle_display_df["ngay"], dayfirst=True, errors="coerce",
+        ).dt.date
+        vehicle_display_df = vehicle_display_df[parsed_vehicle_dates == selected_vehicle_date]
+        vehicle_display_df = vehicle_display_df.sort_values(
+            "vi_tri",
+            key=lambda values: values.fillna("").astype(str).str.casefold(),
+            kind="stable",
+        )
+        vehicle_display_df = vehicle_display_df[["id", "ngay", "bien_so", "loai_xe", "tinh_trang", "vi_tri"]]
+        vehicle_display_df = vehicle_display_df.rename(columns={
+            "ngay": "NGÀY", "bien_so": "BIỂN SỐ", "loai_xe": "LOẠI XE",
+            "tinh_trang": "TÌNH TRẠNG", "vi_tri": "VỊ TRÍ HOẠT ĐỘNG",
+        })
+        if not vehicle_display_df.empty:
+            st.dataframe(vehicle_display_df.drop(columns=["id"]), use_container_width=True, hide_index=True)
+        else:
+            st.info("Chưa có báo cáo phương tiện trong ngày đã chọn.")
+    else:
+        st.date_input(
+            "Tìm ngày", value=date.today(), format="DD/MM/YYYY",
+            key="vehicle_selected_date",
+        )
+        st.info("Chưa có báo cáo phương tiện.")
+
+    if can_edit_tab:
+        st.markdown("---")
+        if st.session_state.is_admin:
+            st.info("**Khu vực thao tác dành cho Admin (Thêm / Sửa / Xóa trực tiếp vào Database)**")
+        else:
+            st.info("**Khu vực thao tác dành cho tài khoản Phương Tiện**")
+
+        add_vehicle_tab, edit_vehicle_tab = st.tabs(["Thêm báo cáo", "Sửa / Xóa báo cáo"])
+        known_plates = list(vehicle_types)
+        if not vehicle_df.empty and "bien_so" in vehicle_df:
+            known_plates = list(dict.fromkeys(
+                known_plates + [
+                    str(value).strip()
+                    for value in vehicle_df["bien_so"].tolist()
+                    if str(value).strip()
+                ]
+            ))
+
+        with add_vehicle_tab:
+            with st.form("add_vehicle_report"):
+                add_date = st.date_input(
+                    "Ngày báo cáo", value=date.today(), format="DD/MM/YYYY",
+                    key="vehicle_add_date",
+                )
+                selected_plate = st.selectbox(
+                    "Biển số", ["", *known_plates, "Thêm xe mới"],
+                    format_func=lambda value: value or " ",
+                    key="vehicle_add_plate",
+                )
+                if selected_plate == "Thêm xe mới":
+                    add_plate = st.text_input("Biển số xe mới").strip().upper()
+                    suggested_type = ""
+                else:
+                    add_plate = selected_plate
+                    suggested_type = vehicle_types.get(selected_plate, "")
+                if selected_plate == "Thêm xe mới":
+                    add_type = st.text_input(
+                        "Loại xe", key="vehicle_add_type_new",
+                    )
+                else:
+                    suggested_type_index = (
+                        vehicle_type_options.index(suggested_type)
+                        if suggested_type in vehicle_type_options else 0
+                    )
+                    add_type = st.selectbox(
+                        "Loại xe", vehicle_type_options,
+                        index=suggested_type_index,
+                        format_func=lambda value: value or " ",
+                        key=f"vehicle_add_type_{selected_plate or 'blank'}",
+                    )
+                add_status = st.selectbox(
+                    "Tình trạng", ["", *vehicle_statuses],
+                    format_func=lambda value: value or " ",
+                    key="vehicle_add_status",
+                )
+                add_location = st.selectbox(
+                    "Vị trí hoạt động", ["", *vehicle_locations],
+                    format_func=lambda value: value or " ",
+                    key="vehicle_add_location",
+                )
+
+                if st.form_submit_button("Lưu báo cáo"):
+                    if not add_plate:
+                        st.error("Vui lòng chọn hoặc nhập biển số xe.")
+                    elif not add_type.strip():
+                        st.error("Loại xe không được để trống.")
+                    elif not add_status:
+                        st.error("Vui lòng chọn tình trạng xe.")
+                    elif not add_location:
+                        st.error("Vui lòng chọn vị trí hoạt động.")
+                    else:
+                        record = {
+                            "ngay": add_date.strftime("%d/%m/%Y"),
+                            "bien_so": add_plate,
+                            "loai_xe": add_type.strip(),
+                            "tinh_trang": add_status,
+                            "vi_tri": add_location,
+                        }
+                        if vehicle_db_available:
+                            try:
+                                supabase.table("vehicles").insert(record).execute()
+                            except Exception as error:
+                                st.error(f"Không thể lưu báo cáo phương tiện: {error}")
+                            else:
+                                st.success("Đã thêm báo cáo phương tiện.")
+                                st.rerun()
+                        else:
+                            record["id"] = len(st.session_state.vehicle_reports) + 1
+                            st.session_state.vehicle_reports.append(record)
+                            st.success("Đã thêm báo cáo trong phiên làm việc.")
+                            st.rerun()
+
+        with edit_vehicle_tab:
+            if vehicle_data:
+                report_ids = [item.get("id") for item in vehicle_data if item.get("id") is not None]
+                selected_vehicle_id = st.selectbox("Chọn ID mục cần sửa hoặc xóa", report_ids)
+                vehicle_target = next(
+                    (item for item in vehicle_data if item.get("id") == selected_vehicle_id),
+                    None,
+                )
+                if vehicle_target:
+                    with st.form("edit_vehicle_report"):
+                        edit_date_value = pd.to_datetime(
+                            vehicle_target.get("ngay"), dayfirst=True, errors="coerce",
+                        )
+                        edit_date = st.date_input(
+                            "Ngày báo cáo",
+                            value=edit_date_value.date() if pd.notna(edit_date_value) else date.today(),
+                            format="DD/MM/YYYY",
+                            key="vehicle_edit_date",
+                        )
+                        edit_plate = st.text_input(
+                            "Biển số", value=str(vehicle_target.get("bien_so", "")),
+                            key="vehicle_edit_plate",
+                        ).strip().upper()
+                        edit_type = st.text_input(
+                            "Loại xe", value=str(vehicle_target.get("loai_xe", "")),
+                            key="vehicle_edit_type",
+                        )
+                        edit_status = st.selectbox(
+                            "Tình trạng", vehicle_statuses,
+                            index=vehicle_statuses.index(vehicle_target.get("tinh_trang"))
+                            if vehicle_target.get("tinh_trang") in vehicle_statuses else 0,
+                            key="vehicle_edit_status",
+                        )
+                        edit_location = st.selectbox(
+                            "Vị trí hoạt động", vehicle_locations,
+                            index=vehicle_locations.index(vehicle_target.get("vi_tri"))
+                            if vehicle_target.get("vi_tri") in vehicle_locations else 0,
+                            key="vehicle_edit_location",
+                        )
+                        update_vehicle, delete_vehicle = st.columns(2)
+                        update_clicked = update_vehicle.form_submit_button("Cập nhật thay đổi")
+                        delete_clicked = delete_vehicle.form_submit_button("Xóa báo cáo", type="secondary")
+
+                    if update_clicked:
+                        if not edit_plate or not edit_type.strip():
+                            st.error("Biển số và loại xe không được để trống.")
+                        else:
+                            updated_record = {
+                                "ngay": edit_date.strftime("%d/%m/%Y"),
+                                "bien_so": edit_plate,
+                                "loai_xe": edit_type.strip(),
+                                "tinh_trang": edit_status,
+                                "vi_tri": edit_location,
+                            }
+                            if vehicle_db_available:
+                                try:
+                                    supabase.table("vehicles").update(updated_record).eq(
+                                        "id", selected_vehicle_id
+                                    ).execute()
+                                except Exception as error:
+                                    st.error(f"Không thể cập nhật báo cáo phương tiện: {error}")
+                                else:
+                                    st.success("Đã cập nhật báo cáo phương tiện.")
+                                    st.rerun()
+                            else:
+                                for index, item in enumerate(st.session_state.vehicle_reports):
+                                    if item.get("id") == selected_vehicle_id:
+                                        st.session_state.vehicle_reports[index] = {
+                                            **updated_record, "id": selected_vehicle_id,
+                                        }
+                                        break
+                                st.success("Đã cập nhật báo cáo trong phiên làm việc.")
+                                st.rerun()
+
+                    if delete_clicked:
+                        if vehicle_db_available:
+                            try:
+                                supabase.table("vehicles").delete().eq(
+                                    "id", selected_vehicle_id
+                                ).execute()
+                            except Exception as error:
+                                st.error(f"Không thể xóa báo cáo phương tiện: {error}")
+                            else:
+                                st.success("Đã xóa báo cáo phương tiện.")
+                                st.rerun()
+                        else:
+                            st.session_state.vehicle_reports = [
+                                item for item in st.session_state.vehicle_reports
+                                if item.get("id") != selected_vehicle_id
+                            ]
+                            st.success("Đã xóa báo cáo trong phiên làm việc.")
+                            st.rerun()
+            else:
+                st.info("Chưa có báo cáo để sửa hoặc xóa.")
 
 # ==================== 3. QUẢN LÝ NHIÊN LIỆU ====================
 elif menu == "Nhiên Liệu":
