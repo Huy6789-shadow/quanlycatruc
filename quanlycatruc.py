@@ -211,17 +211,36 @@ def next_available_id(records):
 
 
 def clear_shift_form_state():
-    keys = [
-        "add_date", "add_team", "add_location", "add_shift", "add_role",
-        "add_people_count", "add_group_work", "add_errors",
-    ]
+    keys = ["add_errors"]
     keys.extend(
         key
         for key in st.session_state
-        if key.startswith(("add_person_name_", "add_person_phone_"))
+        if key.startswith((
+            "add_date_", "add_team_", "add_location_", "add_shift_",
+            "add_role_", "add_people_count_", "add_group_work_",
+            "add_person_name_", "add_person_phone_",
+        ))
     )
     for key in keys:
         st.session_state.pop(key, None)
+    st.session_state["shift_form_version"] = (
+        st.session_state.get("shift_form_version", 0) + 1
+    )
+
+
+def clear_vehicle_form_state():
+    prefixes = ("vehicle_add_", "vehicle_new_")
+    keys = []
+    keys.extend(
+        key
+        for key in st.session_state
+        if key.startswith(prefixes)
+    )
+    for key in keys:
+        st.session_state.pop(key, None)
+    st.session_state["vehicle_form_version"] = (
+        st.session_state.get("vehicle_form_version", 0) + 1
+    )
 
 
 # --- QUẢN LÝ PHÂN QUYỀN ADMIN ---
@@ -750,6 +769,7 @@ if menu == "Báo Cáo Ca Trực":
         tab1, tab2 = st.tabs(["Thêm báo cáo mới", "Sửa / Xóa báo cáo"])
         
         with tab1:
+            shift_form_version = st.session_state.get("shift_form_version", 0)
             role_options = [
                 "Phó Giám Đốc", "Tổ Trưởng", "Đội Trưởng", "Đội Phó",
                 "Hạt Trưởng", "Hạt Phó", "Trưởng Phòng", "Phó Phòng",
@@ -776,19 +796,21 @@ if menu == "Báo Cáo Ca Trực":
             with row_one[0]:
                 r_ngay = st.date_input(
                     "Ngày làm việc", value=selected_date, format="DD/MM/YYYY",
-                    key="add_date",
+                    key=f"add_date_{shift_form_version}",
                 )
             with row_one[1]:
                 r_bophan = st.selectbox(
                     "Đội / Bộ phận", ["", *team_options], index=0,
-                    format_func=lambda value: value or " ", key="add_team",
+                    format_func=lambda value: value or " ",
+                    key=f"add_team_{shift_form_version}",
                 )
                 if add_errors.get("bo_phan"):
                     st.error(add_errors["bo_phan"])
             with row_one[2]:
                 r_vitri = st.selectbox(
                     "Vị trí trực", ["", *location_options], index=0,
-                    format_func=lambda value: value or " ", key="add_location",
+                    format_func=lambda value: value or " ",
+                    key=f"add_location_{shift_form_version}",
                 )
                 if add_errors.get("vi_tri"):
                     st.error(add_errors["vi_tri"])
@@ -797,21 +819,23 @@ if menu == "Báo Cáo Ca Trực":
             with row_two[0]:
                 r_ca = st.selectbox(
                     "Ca trực", ["", *ca_options], index=0,
-                    format_func=lambda value: value or " ", key="add_shift",
+                    format_func=lambda value: value or " ",
+                    key=f"add_shift_{shift_form_version}",
                 )
                 if add_errors.get("ca"):
                     st.error(add_errors["ca"])
             with row_two[1]:
                 r_chucvu = st.selectbox(
                     "Chức vụ", ["", *role_options], index=0,
-                    format_func=lambda value: value or " ", key="add_role",
+                    format_func=lambda value: value or " ",
+                    key=f"add_role_{shift_form_version}",
                 )
                 if add_errors.get("chuc_vu"):
                     st.error(add_errors["chuc_vu"])
             with row_two[2]:
                 r_songuoi = st.number_input(
                     "Số người", min_value=1, max_value=50, value=1, step=1,
-                    key="add_people_count",
+                    key=f"add_people_count_{shift_form_version}",
                 )
 
             with st.form("add_form"):
@@ -823,12 +847,12 @@ if menu == "Báo Cáo Ca Trực":
                     with person_col1:
                         person_name = st.text_input(
                             "Họ và tên",
-                            key=f"add_person_name_{person_index}",
+                            key=f"add_person_name_{shift_form_version}_{person_index}",
                         )
                     with person_col2:
                         person_phone = st.text_input(
                             "Số điện thoại",
-                            key=f"add_person_phone_{person_index}",
+                            key=f"add_person_phone_{shift_form_version}_{person_index}",
                         )
                         if add_errors.get(f"phone_{person_index}"):
                             st.error(add_errors[f"phone_{person_index}"])
@@ -837,7 +861,10 @@ if menu == "Báo Cáo Ca Trực":
                     person_names.append(person_name)
                     person_phones.append(person_phone)
 
-                r_noidung = st.text_area("Nội dung công việc", key="add_group_work")
+                r_noidung = st.text_area(
+                    "Nội dung công việc",
+                    key=f"add_group_work_{shift_form_version}",
+                )
                 if add_errors.get("noi_dung"):
                     st.error(add_errors["noi_dung"])
                 r_hoten = "\n".join(person_names)
@@ -1031,15 +1058,16 @@ elif menu == "Phương Tiện":
             ))
 
         with add_vehicle_tab:
+            vehicle_form_version = st.session_state.get("vehicle_form_version", 0)
             with st.form("add_vehicle_report"):
                 add_date = st.date_input(
                     "Ngày báo cáo", value=date.today(), format="DD/MM/YYYY",
-                    key="vehicle_add_date",
+                    key=f"vehicle_add_date_{vehicle_form_version}",
                 )
                 selected_plate = st.selectbox(
                     "Biển số", ["", *known_plates],
                     format_func=lambda value: value or " ",
-                    key="vehicle_add_plate",
+                    key=f"vehicle_add_plate_{vehicle_form_version}",
                 )
                 add_plate = selected_plate
                 suggested_type = vehicle_types.get(selected_plate, "")
@@ -1051,17 +1079,17 @@ elif menu == "Phương Tiện":
                     "Loại xe", vehicle_type_options,
                     index=suggested_type_index,
                     format_func=lambda value: value or " ",
-                    key=f"vehicle_add_type_{selected_plate or 'blank'}",
+                    key=f"vehicle_add_type_{vehicle_form_version}_{selected_plate or 'blank'}",
                 )
                 add_status = st.selectbox(
                     "Tình trạng", ["", *vehicle_statuses],
                     format_func=lambda value: value or " ",
-                    key="vehicle_add_status",
+                    key=f"vehicle_add_status_{vehicle_form_version}",
                 )
                 add_location = st.selectbox(
                     "Vị trí hoạt động", ["", *vehicle_locations],
                     format_func=lambda value: value or " ",
-                    key="vehicle_add_location",
+                    key=f"vehicle_add_location_{vehicle_form_version}",
                 )
 
                 if st.form_submit_button("Lưu báo cáo"):
@@ -1087,15 +1115,18 @@ elif menu == "Phương Tiện":
                             except Exception as error:
                                 st.error(f"Không thể lưu báo cáo phương tiện: {error}")
                             else:
+                                clear_vehicle_form_state()
                                 st.success("Đã thêm báo cáo phương tiện.")
                                 st.rerun()
                         else:
                             record["id"] = len(st.session_state.vehicle_reports) + 1
                             st.session_state.vehicle_reports.append(record)
+                            clear_vehicle_form_state()
                             st.success("Đã thêm báo cáo trong phiên làm việc.")
                             st.rerun()
 
         with add_new_vehicle_tab:
+            vehicle_form_version = st.session_state.get("vehicle_form_version", 0)
             st.info(
                 "Nhập thủ công biển số và loại xe mới. Có thể sử dụng mục này "
                 "khi danh mục chưa có xe hoặc bảng `vehicles` chưa được tạo."
@@ -1103,26 +1134,26 @@ elif menu == "Phương Tiện":
             with st.form("add_new_vehicle"):
                 new_vehicle_date = st.date_input(
                     "Ngày báo cáo", value=date.today(), format="DD/MM/YYYY",
-                    key="vehicle_new_date",
+                    key=f"vehicle_new_date_{vehicle_form_version}",
                 )
                 new_vehicle_plate = st.text_input(
                     "Biển số xe mới",
-                    key="vehicle_new_plate",
+                    key=f"vehicle_new_plate_{vehicle_form_version}",
                 ).strip().upper()
                 new_vehicle_type = st.text_input(
                     "Loại xe",
-                    key="vehicle_new_type",
+                    key=f"vehicle_new_type_{vehicle_form_version}",
                     help="Nhập đúng tên loại xe theo thực tế.",
                 ).strip()
                 new_vehicle_status = st.selectbox(
                     "Tình trạng", ["", *vehicle_statuses],
                     format_func=lambda value: value or " ",
-                    key="vehicle_new_status",
+                    key=f"vehicle_new_status_{vehicle_form_version}",
                 )
                 new_vehicle_location = st.selectbox(
                     "Vị trí hoạt động", ["", *vehicle_locations],
                     format_func=lambda value: value or " ",
-                    key="vehicle_new_location",
+                    key=f"vehicle_new_location_{vehicle_form_version}",
                 )
 
                 if st.form_submit_button("Lưu xe mới"):
@@ -1148,11 +1179,13 @@ elif menu == "Phương Tiện":
                             except Exception as error:
                                 st.error(f"Không thể lưu xe mới: {error}")
                             else:
+                                clear_vehicle_form_state()
                                 st.success("Đã thêm xe mới.")
                                 st.rerun()
                         else:
                             new_vehicle_record["id"] = len(st.session_state.vehicle_reports) + 1
                             st.session_state.vehicle_reports.append(new_vehicle_record)
+                            clear_vehicle_form_state()
                             st.success("Đã thêm xe mới trong phiên làm việc.")
                             st.rerun()
 
