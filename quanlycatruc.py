@@ -2,9 +2,10 @@ import base64
 import hashlib
 import hmac
 import html
+from io import BytesIO
 import json
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import streamlit as st
@@ -196,6 +197,33 @@ def render_agency_header(display_date):
     <div class="date-strip"> NGÀY: {display_date}</div>
     """, unsafe_allow_html=True)
 
+
+def next_available_id(records):
+    used_ids = {
+        int(item["id"])
+        for item in records
+        if item.get("id") is not None and str(item["id"]).isdigit()
+    }
+    next_id = 1
+    while next_id in used_ids:
+        next_id += 1
+    return next_id
+
+
+def clear_shift_form_state():
+    keys = [
+        "add_date", "add_team", "add_location", "add_shift", "add_role",
+        "add_people_count", "add_group_work", "add_errors",
+    ]
+    keys.extend(
+        key
+        for key in st.session_state
+        if key.startswith(("add_person_name_", "add_person_phone_"))
+    )
+    for key in keys:
+        st.session_state.pop(key, None)
+
+
 # --- QUẢN LÝ PHÂN QUYỀN ADMIN ---
 AUTH_COOKIE_NAME = "quanlycatruc_auth"
 
@@ -247,6 +275,38 @@ def clear_auth_cookie():
         """,
         height=0,
     )
+
+
+def cleanup_old_report_data(supabase_client, cutoff_date):
+    cleanup_tables = ("shift_reports", "vehicles", "fuel_reports")
+    deleted_counts = {}
+    missing_tables = []
+    errors = []
+
+    for table_name in cleanup_tables:
+        try:
+            response = supabase_client.table(table_name).select("id, ngay").execute()
+            old_ids = []
+            for row in response.data or []:
+                parsed_date = pd.to_datetime(
+                    row.get("ngay"), dayfirst=True, errors="coerce"
+                )
+                if pd.notna(parsed_date) and parsed_date.date() < cutoff_date:
+                    row_id = row.get("id")
+                    if row_id is not None:
+                        old_ids.append(row_id)
+            if old_ids:
+                for row_id in old_ids:
+                    supabase_client.table(table_name).delete().eq("id", row_id).execute()
+            deleted_counts[table_name] = len(old_ids)
+        except Exception as error:
+            error_text = str(error)
+            if "PGRST205" in error_text or f"public.{table_name}" in error_text:
+                missing_tables.append(table_name)
+            else:
+                errors.append(f"{table_name}: {error_text}")
+
+    return deleted_counts, missing_tables, errors
 
 
 if "is_admin" not in st.session_state:
@@ -398,6 +458,177 @@ if st.session_state.is_admin:
                         st.success(f"Đã cấp tài khoản cho {new_account_menu}.")
                         st.rerun()
 
+    with st.expander("Xuất báo cáo Excel"):
+        cleanup_cutoff_date = date.today() - timedelta(days=10)
+        if date.today().weekday() >= 5:
+            st.warning(
+                "Nhắc Admin cuối tuần: hãy tải file Excel sao lưu trước khi dữ liệu "
+                f"trước ngày {cleanup_cutoff_date:%d/%m/%Y} được tự động dọn dẹp."
+            )
+        if not db_connected:
+            st.warning(
+                "Chưa kết nối Supabase nên chưa thể tự động dọn dữ liệu. "
+                "Hãy sao lưu dữ liệu phiên làm việc trước khi đóng ứng dụng."
+            )
+
+        export_dates = st.date_input(
+            "Ngày báo cáo (chọn một ngày hoặc khoảng ngày)",
+            value=(date.today(), date.today()),
+            format="DD/MM/YYYY",
+            key="export_report_dates",
+        )
+        if isinstance(export_dates, (list, tuple)):
+            if len(export_dates) == 2:
+                export_start, export_end = export_dates
+            elif len(export_dates) == 1:
+                export_start = export_end = export_dates[0]
+            else:
+                export_start = export_end = date.today()
+            if export_start is None:
+                export_start = date.today()
+            if export_end is None:
+                export_end = export_start
+        else:
+            export_start = export_end = export_dates
+        if st.button("Tạo file Excel", key="create_excel_report"):
+            export_tables = {
+                "Báo cáo ca trực": ("shift_reports", "shift_reports"),
+                "Phương tiện": ("vehicles", "vehicles"),
+                "Nhiên liệu": ("fuel_reports", "fuel_reports"),
+            }
+            export_columns = {
+                "Báo cáo ca trực": [
+                    ("ngay", "NGÀY LÀM VIỆC"),
+                    ("ca", "CA TRỰC"),
+                    ("ho_ten", "HỌ VÀ TÊN"),
+                    ("bo_phan", "ĐỘI/BỘ PHẬN"),
+                    ("chuc_vu", "CHỨC VỤ"),
+                    ("vi_tri", "VỊ TRÍ TRỰC"),
+                    ("noi_dung", "NỘI DUNG CÔNG VIỆC"),
+                    ("sdt", "SỐ ĐIỆN THOẠI"),
+                ],
+                "Phương tiện": [
+                    ("ngay", "NGÀY"),
+                    ("bien_so", "BIỂN SỐ"),
+                    ("loai_xe", "LOẠI XE"),
+                    ("tinh_trang", "TÌNH TRẠNG"),
+                    ("vi_tri", "VỊ TRÍ HOẠT ĐỘNG"),
+                ],
+            }
+            export_frames = {}
+            missing_tables = []
+            for sheet_name, (table_name, _) in export_tables.items():
+                if not db_connected:
+                    export_frames[sheet_name] = pd.DataFrame()
+                    continue
+                try:
+                    response = supabase.table(table_name).select("*").execute()
+                    table_frame = pd.DataFrame(response.data or [])
+                except Exception as error:
+                    if "PGRST205" in str(error) or f"public.{table_name}" in str(error):
+                        missing_tables.append(table_name)
+                        table_frame = pd.DataFrame()
+                    else:
+                        st.error(f"Không thể đọc bảng {table_name}: {error}")
+                        table_frame = pd.DataFrame()
+                if "ngay" in table_frame.columns:
+                    parsed_dates = pd.to_datetime(
+                        table_frame["ngay"], dayfirst=True, errors="coerce",
+                    ).dt.date
+                    table_frame = table_frame[
+                        parsed_dates.between(export_start, export_end, inclusive="both")
+                    ]
+                if sheet_name in export_columns:
+                    ordered_columns = export_columns[sheet_name]
+                    for source_column, _ in ordered_columns:
+                        if source_column not in table_frame:
+                            table_frame[source_column] = ""
+                    table_frame = table_frame[
+                        [source_column for source_column, _ in ordered_columns]
+                    ].rename(
+                        columns=dict(ordered_columns)
+                    )
+                else:
+                    table_frame = table_frame.drop(
+                        columns=["id", "phan_muc"], errors="ignore"
+                    )
+                export_frames[sheet_name] = table_frame
+
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                for sheet_name, table_frame in export_frames.items():
+                    if table_frame.empty:
+                        table_frame = pd.DataFrame(
+                            {
+                                "Ghi chú": [
+                                    f"Không có dữ liệu từ {export_start:%d/%m/%Y} "
+                                    f"đến {export_end:%d/%m/%Y}."
+                                ]
+                            }
+                        )
+                    worksheet_name = sheet_name[:31]
+                    table_frame.to_excel(writer, sheet_name=worksheet_name, index=False)
+                    worksheet = writer.sheets[worksheet_name]
+                    worksheet.freeze_panes = "A2"
+                    worksheet.auto_filter.ref = worksheet.dimensions
+                    for cell in worksheet[1]:
+                        cell.font = cell.font.copy(bold=True, color="FFFFFF")
+                        cell.fill = cell.fill.copy(fill_type="solid", fgColor="1F4E78")
+                    for column_cells in worksheet.columns:
+                        column_letter = column_cells[0].column_letter
+                        max_length = max(
+                            len(str(cell.value)) if cell.value is not None else 0
+                            for cell in column_cells
+                        )
+                        worksheet.column_dimensions[column_letter].width = min(
+                            max(max_length + 2, 12), 45
+                        )
+                        for cell in column_cells:
+                            cell.alignment = cell.alignment.copy(
+                                vertical="top", wrap_text=True
+                            )
+            output.seek(0)
+            if missing_tables:
+                st.warning(
+                    "Chưa có dữ liệu. Các sheet tương ứng được xuất kèm ghi chú."
+                )
+            st.download_button(
+                "Tải báo cáo Excel",
+                data=output.getvalue(),
+                file_name=(
+                    f"bao_cao_van_hanh_{export_start:%Y-%m-%d}.xlsx"
+                    if export_start == export_end
+                    else f"bao_cao_van_hanh_{export_start:%Y-%m-%d}_"
+                    f"{export_end:%Y-%m-%d}.xlsx"
+                ),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_excel_report",
+            )
+            if st.session_state.get("cleanup_last_run") != date.today():
+                deleted_counts, missing_cleanup_tables, cleanup_errors = (
+                    cleanup_old_report_data(supabase, cleanup_cutoff_date)
+                    if db_connected
+                    else ({}, [], [])
+                )
+                st.session_state.cleanup_last_run = date.today()
+                deleted_total = sum(deleted_counts.values())
+                if deleted_total:
+                    st.info(
+                        f"Hệ thống đã tự động dọn {deleted_total} bản ghi cũ hơn 10 ngày "
+                        f"(trước {cleanup_cutoff_date:%d/%m/%Y})."
+                    )
+                if missing_cleanup_tables:
+                    st.caption(
+                        "Bỏ qua bảng chưa có: "
+                        + ", ".join(missing_cleanup_tables)
+                        + "."
+                    )
+                if cleanup_errors:
+                    st.error(
+                        "Một số bảng chưa được dọn dẹp: "
+                        + " | ".join(cleanup_errors)
+                    )
+
 selected_account = st.session_state.tab_accounts[menu]
 can_edit_tab = (
     st.session_state.is_admin
@@ -445,11 +676,11 @@ if menu == "Báo Cáo Ca Trực":
 
         return pd.DataFrame({
             "NGÀY LÀM VIỆC": source_column_or_blank("ngay"),
-            "ĐỘI/BỘ PHẬN": source_column_or_blank("bo_phan"),
             "CA TRỰC": source_column_or_blank("ca"),
-            "VỊ TRÍ TRỰC": source_column_or_blank("vi_tri"),
             "HỌ VÀ TÊN": source_column_or_blank("ho_ten"),
+            "ĐỘI/BỘ PHẬN": source_column_or_blank("bo_phan"),
             "CHỨC VỤ": source_column_or_blank("chuc_vu"),
+            "VỊ TRÍ TRỰC": source_column_or_blank("vi_tri"),
             "NỘI DUNG CÔNG VIỆC": source_column_or_blank("noi_dung"),
             "SỐ ĐIỆN THOẠI": source_column_or_blank("sdt"),
         })
@@ -476,33 +707,37 @@ if menu == "Báo Cáo Ca Trực":
 
     ca1_tab, ca2_tab, ca3_tab, leave_tab = st.tabs(["CA 1", "CA 2", "CA 3", "NHÂN SỰ NGHỈ PHÉP"])
     with ca1_tab:
-        st.caption("Danh sách nhân sự trực Ca 1.")
+        st.caption("Danh sách nhân sự trực HC, Ca 1 và Ca gãy.")
         if not df.empty:
-            ca1_df = df[df["ca"].fillna("").astype(str).str.startswith(("Ca 1", "HC"))]
+            ca1_df = df[df["ca"].fillna("").astype(str).str.startswith(("Ca 1", "Ca gãy", "HC"))]
             render_schedule_table(ca1_df)
         else:
-            st.info("Chưa có dữ liệu Ca 1.")
+            st.info("Chưa có dữ liệu.")
     with ca2_tab:
         st.caption("Danh sách nhân sự trực Ca 2.")
         if not df.empty:
             ca2_df = df[df["ca"].fillna("").astype(str).str.startswith("Ca 2")]
             render_schedule_table(ca2_df)
         else:
-            st.info("Chưa có dữ liệu Ca 2.")
+            st.info("Chưa có dữ liệu.")
     with ca3_tab:
         st.caption("Danh sách nhân sự trực Ca 3.")
         if not df.empty:
             ca3_df = df[df["ca"].fillna("").astype(str).str.startswith("Ca 3")]
             render_schedule_table(ca3_df)
         else:
-            st.info("Chưa có dữ liệu Ca 3.")
+            st.info("Chưa có dữ liệu.")
     with leave_tab:
-        st.caption("Theo dõi nhân sự nghỉ phép.")
+        st.caption("Theo dõi nhân sự nghỉ phép và nghỉ không lương.")
         if not df.empty:
-            leave_df = df[df["ca"].fillna("").astype(str).str.startswith("Nghỉ Phép")]
+            leave_df = df[
+                df["ca"].fillna("").astype(str).str.startswith(
+                    ("Nghỉ Phép", "Nghỉ Không Lương")
+                )
+            ]
             render_schedule_table(leave_df)
         else:
-            st.info("Chưa có dữ liệu nghỉ phép.")
+            st.info("Chưa có dữ liệu.")
 
     # Chỉ Admin hoặc tài khoản được cấp cho tab này mới được thao tác dữ liệu.
     if can_edit_tab:
@@ -518,13 +753,14 @@ if menu == "Báo Cáo Ca Trực":
             role_options = [
                 "Phó Giám Đốc", "Tổ Trưởng", "Đội Trưởng", "Đội Phó",
                 "Hạt Trưởng", "Hạt Phó", "Trưởng Phòng", "Phó Phòng",
-                "Nhân viên",
+                "Ca Trưởng", "Nhân viên",
             ]
             add_errors = st.session_state.get("add_errors", {})
             team_options = sorted(set(df.get("bo_phan", pd.Series(dtype=str)).dropna().astype(str)) | {
                 "Tổ ITS", "Đội PCCC&CHCN TLMT", "Đội PCCC&CHCN TPHCM-TL",
                 "Hạt QLĐB", "TTP", "Tổ Điện", "Hotline", "Tuần Đường",
-                "Ban Lãnh Đạo", "Phòng Tổng Hợp"
+                "Ban Lãnh Đạo", "Phòng Tổng Hợp", "GSHK",
+                "Đội ĐBGT", "Lái Xe",
             })
             location_options = sorted(set(df.get("vi_tri", pd.Series(dtype=str)).dropna().astype(str)) | {
                 "TMC TL-MT", "TMC TP.HCM-TL", "Tuyến cao tốc TL-MT", "Tuyến cao tốc TP.HCM-TL",
@@ -532,12 +768,16 @@ if menu == "Báo Cáo Ca Trực":
             })
             ca_options = [
                 "Ca 1 (06h-14h)", "Ca 2 (14h-22h)", "Ca 3 (22h-06h)",
-                "HC (Hành Chính)", "Nghỉ Phép"
+                "Ca gãy (10h-18h)",
+                "HC (Hành Chính)", "Nghỉ Phép", "Nghỉ Không Lương"
             ]
 
             row_one = st.columns(3)
             with row_one[0]:
-                r_ngay = st.date_input("Ngày làm việc", value=selected_date, format="DD/MM/YYYY")
+                r_ngay = st.date_input(
+                    "Ngày làm việc", value=selected_date, format="DD/MM/YYYY",
+                    key="add_date",
+                )
             with row_one[1]:
                 r_bophan = st.selectbox(
                     "Đội / Bộ phận", ["", *team_options], index=0,
@@ -627,16 +867,18 @@ if menu == "Báo Cáo Ca Trực":
                     elif db_connected:
                         st.session_state["add_errors"] = {}
                         try:
-                            supabase.table("shift_reports").insert({
+                            record = {
                                 "ngay": r_ngay.strftime("%d/%m/%Y"), "ca": r_ca,
                                 "phan_muc": "I. Phòng Vận hành",
                                 "bo_phan": r_bophan, "vi_tri": r_vitri, "ho_ten": r_hoten,
                                 "chuc_vu": r_chucvu, "so_nguoi": r_songuoi,
                                 "noi_dung": r_noidung, "sdt": r_sdt
-                            }).execute()
+                            }
+                            supabase.table("shift_reports").insert(record).execute()
                         except Exception as error:
                             st.error(f"Không thể lưu dữ liệu: {error}")
                         else:
+                            clear_shift_form_state()
                             st.success("Đã thêm dữ liệu thành công vào Database!")
                             st.rerun()
                     else:
@@ -673,6 +915,8 @@ if menu == "Báo Cáo Ca Trực":
 elif menu == "Phương Tiện":
     st.markdown('<div class="section-caption">QUẢN LÝ PHƯƠNG TIỆN</div>', unsafe_allow_html=True)
     vehicle_types = {
+        "43C-264.94": "Xe bán tải",
+        "43B-056.03": "Xe cứu thương Hyundai",
         "43H-021.35": "Xe tải thùng 3,5T",
         "43C-262.53": "Xe quét rác",
         "43C-270.17": "Xe cẩu thùng Hyundai",
@@ -695,6 +939,7 @@ elif menu == "Phương Tiện":
         "Xe quét rác",
         "Xe cẩu thùng Hyundai",
         "Xe bán tải",
+        "Xe cứu thương Hyundai",
         "Xe cứu thương Transit",
         "Xe chữa cháy",
         "Xe stec nước",
@@ -772,7 +1017,9 @@ elif menu == "Phương Tiện":
         else:
             st.info("**Khu vực thao tác dành cho tài khoản Phương Tiện**")
 
-        add_vehicle_tab, edit_vehicle_tab = st.tabs(["Thêm báo cáo", "Sửa / Xóa báo cáo"])
+        add_vehicle_tab, add_new_vehicle_tab, edit_vehicle_tab = st.tabs(
+            ["Thêm báo cáo", "Thêm xe mới", "Sửa / Xóa báo cáo"]
+        )
         known_plates = list(vehicle_types)
         if not vehicle_df.empty and "bien_so" in vehicle_df:
             known_plates = list(dict.fromkeys(
@@ -790,31 +1037,22 @@ elif menu == "Phương Tiện":
                     key="vehicle_add_date",
                 )
                 selected_plate = st.selectbox(
-                    "Biển số", ["", *known_plates, "Thêm xe mới"],
+                    "Biển số", ["", *known_plates],
                     format_func=lambda value: value or " ",
                     key="vehicle_add_plate",
                 )
-                if selected_plate == "Thêm xe mới":
-                    add_plate = st.text_input("Biển số xe mới").strip().upper()
-                    suggested_type = ""
-                else:
-                    add_plate = selected_plate
-                    suggested_type = vehicle_types.get(selected_plate, "")
-                if selected_plate == "Thêm xe mới":
-                    add_type = st.text_input(
-                        "Loại xe", key="vehicle_add_type_new",
-                    )
-                else:
-                    suggested_type_index = (
-                        vehicle_type_options.index(suggested_type)
-                        if suggested_type in vehicle_type_options else 0
-                    )
-                    add_type = st.selectbox(
-                        "Loại xe", vehicle_type_options,
-                        index=suggested_type_index,
-                        format_func=lambda value: value or " ",
-                        key=f"vehicle_add_type_{selected_plate or 'blank'}",
-                    )
+                add_plate = selected_plate
+                suggested_type = vehicle_types.get(selected_plate, "")
+                suggested_type_index = (
+                    vehicle_type_options.index(suggested_type)
+                    if suggested_type in vehicle_type_options else 0
+                )
+                add_type = st.selectbox(
+                    "Loại xe", vehicle_type_options,
+                    index=suggested_type_index,
+                    format_func=lambda value: value or " ",
+                    key=f"vehicle_add_type_{selected_plate or 'blank'}",
+                )
                 add_status = st.selectbox(
                     "Tình trạng", ["", *vehicle_statuses],
                     format_func=lambda value: value or " ",
@@ -855,6 +1093,67 @@ elif menu == "Phương Tiện":
                             record["id"] = len(st.session_state.vehicle_reports) + 1
                             st.session_state.vehicle_reports.append(record)
                             st.success("Đã thêm báo cáo trong phiên làm việc.")
+                            st.rerun()
+
+        with add_new_vehicle_tab:
+            st.info(
+                "Nhập thủ công biển số và loại xe mới. Có thể sử dụng mục này "
+                "khi danh mục chưa có xe hoặc bảng `vehicles` chưa được tạo."
+            )
+            with st.form("add_new_vehicle"):
+                new_vehicle_date = st.date_input(
+                    "Ngày báo cáo", value=date.today(), format="DD/MM/YYYY",
+                    key="vehicle_new_date",
+                )
+                new_vehicle_plate = st.text_input(
+                    "Biển số xe mới",
+                    key="vehicle_new_plate",
+                ).strip().upper()
+                new_vehicle_type = st.text_input(
+                    "Loại xe",
+                    key="vehicle_new_type",
+                    help="Nhập đúng tên loại xe theo thực tế.",
+                ).strip()
+                new_vehicle_status = st.selectbox(
+                    "Tình trạng", ["", *vehicle_statuses],
+                    format_func=lambda value: value or " ",
+                    key="vehicle_new_status",
+                )
+                new_vehicle_location = st.selectbox(
+                    "Vị trí hoạt động", ["", *vehicle_locations],
+                    format_func=lambda value: value or " ",
+                    key="vehicle_new_location",
+                )
+
+                if st.form_submit_button("Lưu xe mới"):
+                    if not new_vehicle_plate:
+                        st.error("Vui lòng nhập biển số xe.")
+                    elif not new_vehicle_type:
+                        st.error("Vui lòng nhập loại xe.")
+                    elif not new_vehicle_status:
+                        st.error("Vui lòng chọn tình trạng xe.")
+                    elif not new_vehicle_location:
+                        st.error("Vui lòng chọn vị trí hoạt động.")
+                    else:
+                        new_vehicle_record = {
+                            "ngay": new_vehicle_date.strftime("%d/%m/%Y"),
+                            "bien_so": new_vehicle_plate,
+                            "loai_xe": new_vehicle_type,
+                            "tinh_trang": new_vehicle_status,
+                            "vi_tri": new_vehicle_location,
+                        }
+                        if vehicle_db_available:
+                            try:
+                                supabase.table("vehicles").insert(new_vehicle_record).execute()
+                            except Exception as error:
+                                st.error(f"Không thể lưu xe mới: {error}")
+                            else:
+                                st.success("Đã thêm xe mới.")
+                                st.rerun()
+                        else:
+                            new_vehicle_record["id"] = len(st.session_state.vehicle_reports) + 1
+                            st.session_state.vehicle_reports.append(new_vehicle_record)
+                            st.success("Đã thêm xe mới trong phiên làm việc.")
                             st.rerun()
 
         with edit_vehicle_tab:
