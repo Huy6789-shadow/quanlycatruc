@@ -11,7 +11,28 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
-from supabase import create_client, Client
+from supabase import create_client
+
+
+SHIFT_ROLE_PRIORITY = {
+    "Phó Giám Đốc": 0,
+    "Hạt Trưởng": 1,
+    "Hạt Phó": 2,
+    "Trưởng Phòng": 3,
+    "Phó Phòng": 4,
+    "Đội Trưởng": 5,
+    "Đội Phó": 6,
+    "Ca Trưởng": 7,
+    "Tổ Trưởng": 8,
+}
+
+REPORT_GROUP_COLORS = (
+    ("#eef3ff", "#142b78"),
+    ("#effaf3", "#176b3a"),
+    ("#fff6e5", "#8a5200"),
+    ("#f8efff", "#6b2c91"),
+    ("#fff0f0", "#9b2525"),
+)
 
 st.set_page_config(page_title="Quản lý vận hành", layout="wide", initial_sidebar_state="collapsed")
 
@@ -19,7 +40,10 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700&display=swap');
 :root { --navy:#142b78; --red:#c62f2f; --line:#d8d8d8; --paper:#fffef8; }
-.stApp { background:#f7f4df; color:#414141; font-family:'Roboto Condensed','Arial Narrow',Arial,sans-serif; width:100%; overflow-x:hidden; }
+.stApp { background:#f7f4df; color:#414141; font-family:'Roboto Condensed','Arial Narrow',Arial,sans-serif; width:100%; overflow-x:hidden; color-scheme:light; }
+html, body, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
+    color-scheme:light !important;
+}
 .block-container { width:100%; max-width:none; box-sizing:border-box; margin:0; padding:.5rem clamp(.3rem,1vw,.75rem) 2rem; }
 [data-testid="stHeader"] { background:transparent; }
 /* Ẩn các nút quảng bá/deploy của Streamlit nhưng giữ nút mở sidebar và khu vực đăng nhập. */
@@ -115,11 +139,212 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
     box-shadow: none !important; /* Xóa bỏ vạch đỏ mập ở phía trên */
 }
 .stDataFrame { background:#fff; }
+/* Đồng bộ màu các ô nhập và nút thao tác trên cả nền sáng và chế độ trình duyệt tối. */
+[data-testid="stDateInput"] input,
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea {
+    background:#fff !important;
+    color:#252525 !important;
+    border-color:#cfd6df !important;
+    -webkit-text-fill-color:#252525 !important;
+}
+[data-testid="stDateInput"] > div,
+[data-testid="stTextInput"] > div,
+[data-testid="stNumberInput"] > div,
+[data-testid="stTextArea"] > div,
+[data-testid="stDateInput"] [data-baseweb="input"],
+[data-testid="stDateInput"] [data-baseweb="base-input"],
+[data-testid="stSelectbox"] [data-baseweb="select"],
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    background:#fff !important;
+    color:#252525 !important;
+    border-color:#cfd6df !important;
+}
+[data-testid="stDateInput"] *,
+[data-testid="stTextInput"] *,
+[data-testid="stNumberInput"] *,
+[data-testid="stTextArea"] *,
+[data-testid="stSelectbox"] * {
+    color:#252525 !important;
+}
+[data-baseweb="input"],
+[data-baseweb="base-input"],
+[data-baseweb="input-container"],
+[data-baseweb="select"],
+[data-baseweb="select"] > div,
+[role="combobox"] {
+    background:#fff !important;
+    color:#252525 !important;
+    border-color:#cfd6df !important;
+    color-scheme:light !important;
+}
+[data-baseweb="input"] *,
+[data-baseweb="base-input"] *,
+[data-baseweb="input-container"] *,
+[data-baseweb="select"] *,
+[role="combobox"] * {
+    background-color:transparent !important;
+    color:#252525 !important;
+    -webkit-text-fill-color:#252525 !important;
+}
+[data-testid="stDateInput"] [data-baseweb="input"] *,
+[data-testid="stDateInput"] [data-baseweb="base-input"] * {
+    background:#fff !important;
+    color:#252525 !important;
+    -webkit-text-fill-color:#252525 !important;
+}
+[data-testid="stDateInput"] [data-baseweb="input"] > div,
+[data-testid="stDateInput"] [data-baseweb="input"] input,
+[data-testid="stDateInput"] [data-baseweb="base-input"] > div {
+    background:#fff !important;
+    color:#252525 !important;
+    border-color:#cfd6df !important;
+    -webkit-text-fill-color:#252525 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="value-container"],
+[data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="single-value"],
+[data-testid="stSelectbox"] [data-baseweb="select"] input {
+    color:#252525 !important;
+    -webkit-text-fill-color:#252525 !important;
+}
+[data-testid="stTextInput"] label,
+[data-testid="stTextArea"] label,
+[data-testid="stNumberInput"] label,
+[data-testid="stDateInput"] label,
+[data-testid="stSelectbox"] label,
+[data-testid="stMarkdownContainer"] label {
+    color:#414141 !important;
+}
+[data-testid="stTextInput"] input:disabled {
+    background:#f4f6f8 !important;
+    color:#252525 !important;
+    -webkit-text-fill-color:#252525 !important;
+    opacity:1 !important;
+}
+[data-testid="stDateInput"] input::placeholder,
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder {
+    color:#68717c !important;
+    opacity:1 !important;
+}
+[data-testid="stDateInput"] svg,
+[data-testid="stSelectbox"] svg,
+[data-testid="stNumberInput"] button svg {
+    color:#142b78 !important;
+    fill:#142b78 !important;
+}
+[data-baseweb="menu"],
+[data-baseweb="popover"],
+[data-baseweb="calendar"] {
+    background:#fff !important;
+    color:#252525 !important;
+    color-scheme:light !important;
+}
+[data-baseweb="calendar"] *,
+[data-baseweb="popover"] * {
+    color:#252525 !important;
+}
+[data-baseweb="calendar"] button {
+    background:#fff !important;
+    border-color:transparent !important;
+}
+[data-baseweb="calendar"] button:hover,
+[data-baseweb="calendar"] button[aria-selected="true"] {
+    background:#eaf0ff !important;
+    color:#142b78 !important;
+}
+[role="option"] {
+    color:#252525 !important;
+    background:#fff !important;
+}
+[role="option"][aria-selected="true"],
+[role="option"]:hover {
+    background:#eaf0ff !important;
+    color:#142b78 !important;
+}
+/* Hộp đăng nhập phải giữ giao diện sáng, không phụ thuộc theme trình duyệt. */
+[role="dialog"],
+[data-testid="stDialog"],
+[data-testid="stDialog"] > div,
+[data-testid="stDialog"] form,
+[role="dialog"] form {
+    background:#fff !important;
+    color:#252525 !important;
+}
+[role="dialog"] *,
+[data-testid="stDialog"] * {
+    color:#252525 !important;
+}
+[role="dialog"] input,
+[data-testid="stDialog"] input {
+    background:#fff !important;
+    color:#252525 !important;
+    border-color:#cfd6df !important;
+    -webkit-text-fill-color:#252525 !important;
+}
+[role="dialog"] [data-testid="stFormSubmitButton"] > button,
+[data-testid="stDialog"] [data-testid="stFormSubmitButton"] > button {
+    background:#142b78 !important;
+    color:#fff !important;
+    border-color:#142b78 !important;
+}
+[role="dialog"] [data-testid="stFormSubmitButton"] > button *,
+[data-testid="stDialog"] [data-testid="stFormSubmitButton"] > button * {
+    color:#fff !important;
+    -webkit-text-fill-color:#fff !important;
+}
+[data-testid="stButton"] > button,
+[data-testid="stFormSubmitButton"] > button {
+    background:#142b78 !important;
+    color:#fff !important;
+    border:1px solid #142b78 !important;
+    font-weight:700 !important;
+}
+[data-testid="stButton"] > button *,
+[data-testid="stFormSubmitButton"] > button * {
+    color:inherit !important;
+    -webkit-text-fill-color:currentColor !important;
+}
+[data-testid="stButton"] > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+    background:#1f3d9b !important;
+    border-color:#1f3d9b !important;
+    color:#fff !important;
+}
+[data-testid="stButton"] > button:focus,
+[data-testid="stFormSubmitButton"] > button:focus {
+    box-shadow:0 0 0 .15rem rgba(20,43,120,.22) !important;
+}
+[data-testid="stButton"] > button[kind="secondary"],
+[data-testid="stFormSubmitButton"] > button[kind="secondary"] {
+    background:#fff !important;
+    color:#c62f2f !important;
+    border-color:#c62f2f !important;
+}
+[data-testid="stButton"] > button[kind="secondary"]:hover,
+[data-testid="stFormSubmitButton"] > button[kind="secondary"]:hover {
+    background:#fff1f1 !important;
+    color:#a52222 !important;
+    border-color:#a52222 !important;
+}
+.login-toolbar [data-testid="stButton"] > button {
+    background:#fff !important;
+    color:#142b78 !important;
+    border-color:#cfd6df !important;
+}
+.login-toolbar [data-testid="stButton"] > button:hover {
+    background:#eef3ff !important;
+    color:#142b78 !important;
+    border-color:#142b78 !important;
+}
 .schedule-table-wrap { width:100%; overflow-x:auto; margin:.4rem 0 1rem; }
 .schedule-table { width:100%; border-collapse:collapse; background:#fff; color:#111; font-size:.9rem; }
 .schedule-table th, .schedule-table td { border:1px solid #d9d9d9; padding:.55rem .5rem; text-align:left; vertical-align:top; white-space:normal; }
 .schedule-table th { background:#edf1f5; color:#111; font-weight:700; }
 .schedule-table td { background:#fff; color:#111; line-height:1.45; }
+.schedule-table .schedule-group-row td { font-weight:700; border-top:2px solid currentColor; }
+.schedule-table .schedule-group-row + tr td { border-top:0; }
 .admin-panel { background:#fff; border-top:3px solid var(--navy); padding:.75rem; margin-top:1rem; }
 @media (max-width:650px) {
     .block-container { padding:.25rem .3rem 1.25rem; }
@@ -557,6 +782,29 @@ if st.session_state.is_admin:
                     table_frame = table_frame[
                         parsed_dates.between(export_start, export_end, inclusive="both")
                     ]
+                if (
+                    sheet_name == "Báo cáo ca trực"
+                    and not table_frame.empty
+                    and "bo_phan" in table_frame.columns
+                    and "chuc_vu" in table_frame.columns
+                ):
+                    table_frame = table_frame.assign(
+                        _team_sort=table_frame["bo_phan"].fillna("").astype(str).str.casefold(),
+                        _location_sort=table_frame.get(
+                            "vi_tri", pd.Series("", index=table_frame.index)
+                        ).fillna("").astype(str).str.casefold(),
+                        _role_name_sort=table_frame["chuc_vu"].fillna("").astype(str).str.casefold(),
+                        _role_order=table_frame["chuc_vu"].fillna("").map(
+                            lambda value: SHIFT_ROLE_PRIORITY.get(
+                                str(value).strip(), 99
+                            )
+                        )
+                    ).sort_values(
+                        ["_team_sort", "_location_sort", "_role_order", "_role_name_sort"],
+                        kind="stable",
+                    ).drop(
+                        columns=["_team_sort", "_location_sort", "_role_name_sort", "_role_order"]
+                    )
                 if sheet_name in export_columns:
                     ordered_columns = export_columns[sheet_name]
                     for source_column, _ in ordered_columns:
@@ -663,9 +911,10 @@ if menu == "Báo Cáo Ca Trực":
     if db_connected:
         try:
             response = supabase.table("shift_reports").select("*").execute()
-            data = response.data
-        except:
+            data = response.data or []
+        except Exception as error:
             data = []
+            st.warning(f"Không thể đọc dữ liệu báo cáo ca trực: {error}")
     else:
         # Dữ liệu mẫu nếu chưa kết nối DB để test giao diện
         data = [
@@ -673,6 +922,9 @@ if menu == "Báo Cáo Ca Trực":
         ]
     
     df = pd.DataFrame(data)
+    for column in ("ngay", "ca", "ho_ten", "bo_phan", "chuc_vu", "vi_tri", "noi_dung", "sdt"):
+        if column not in df:
+            df[column] = ""
     # Luôn mở lịch ở ngày hiện tại; nếu hôm nay chưa có dữ liệu, bảng sẽ để trống.
     default_date = date.today()
     selected_date = st.session_state.get("selected_date", default_date)
@@ -685,7 +937,17 @@ if menu == "Báo Cáo Ca Trực":
         df = df[pd.to_datetime(df["ngay"], dayfirst=True, errors="coerce").dt.date == selected_date]
 
     if not df.empty:
-        df = df.sort_values("bo_phan", key=lambda values: values.fillna("").astype(str).str.casefold())
+        df = df.assign(
+            _team_sort=df["bo_phan"].fillna("").astype(str).str.casefold(),
+            _location_sort=df["vi_tri"].fillna("").astype(str).str.casefold(),
+            _role_name_sort=df["chuc_vu"].fillna("").astype(str).str.casefold(),
+            _role_order=df["chuc_vu"].fillna("").map(
+                lambda value: SHIFT_ROLE_PRIORITY.get(str(value).strip(), 99)
+            )
+        ).sort_values(
+            ["_team_sort", "_location_sort", "_role_order", "_role_name_sort"],
+            kind="stable",
+        ).drop(columns=["_team_sort", "_location_sort", "_role_name_sort"])
 
     def make_schedule(source_df):
         def source_column_or_blank(name):
@@ -708,11 +970,34 @@ if menu == "Báo Cáo Ca Trực":
         schedule = make_schedule(source_df)
         headers = "".join(f"<th>{html.escape(str(column))}</th>" for column in schedule.columns)
         rows = []
+        previous_group = None
+        group_index = -1
         for _, row in schedule.iterrows():
+            group = (
+                str(row["ĐỘI/BỘ PHẬN"]).strip() or "Chưa phân loại",
+                str(row["VỊ TRÍ TRỰC"]).strip() or "Chưa phân loại",
+            )
+            if group != previous_group:
+                group_index += 1
+                background, foreground = REPORT_GROUP_COLORS[
+                    group_index % len(REPORT_GROUP_COLORS)
+                ]
+                group_label = (
+                    f"Đội/Bộ phận: {html.escape(group[0])}"
+                    f" &nbsp;|&nbsp; Vị trí làm việc: {html.escape(group[1])}"
+                )
+                rows.append(
+                    f'<tr class="schedule-group-row" style="background:{background};'
+                    f'color:{foreground};"><td colspan="{len(schedule.columns)}">'
+                    f"{group_label}</td></tr>"
+                )
+                previous_group = group
             cells = []
             for value in row:
                 cell_value = html.escape(str(value) if pd.notna(value) else "").replace("\n", "<br>")
-                cells.append(f"<td>{cell_value}</td>")
+                cells.append(
+                    f'<td style="background-color:{background};">{cell_value}</td>'
+                )
             rows.append(f"<tr>{''.join(cells)}</tr>")
         table_html = f"""
         <div class="schedule-table-wrap">
@@ -771,9 +1056,9 @@ if menu == "Báo Cáo Ca Trực":
         with tab1:
             shift_form_version = st.session_state.get("shift_form_version", 0)
             role_options = [
-                "Phó Giám Đốc", "Tổ Trưởng", "Đội Trưởng", "Đội Phó",
-                "Hạt Trưởng", "Hạt Phó", "Trưởng Phòng", "Phó Phòng",
-                "Ca Trưởng", "Nhân viên",
+                "Phó Giám Đốc", "Hạt Trưởng", "Hạt Phó", "Trưởng Phòng",
+                "Phó Phòng", "Đội Trưởng", "Đội Phó", "Ca Trưởng",
+                "Tổ Trưởng", "Giám Đốc", "Nhân viên",
             ]
             add_errors = st.session_state.get("add_errors", {})
             team_options = sorted(set(df.get("bo_phan", pd.Series(dtype=str)).dropna().astype(str)) | {
@@ -848,12 +1133,16 @@ if menu == "Báo Cáo Ca Trực":
                         person_name = st.text_input(
                             "Họ và tên",
                             key=f"add_person_name_{shift_form_version}_{person_index}",
-                        )
+                        ).strip()
                     with person_col2:
                         person_phone = st.text_input(
-                            "Số điện thoại",
-                            key=f"add_person_phone_{shift_form_version}_{person_index}",
-                        )
+                            "Số điện thoại (10 hoặc 11 chữ số)",
+                            max_chars=11,
+                            key=(
+                                f"add_person_phone_{shift_form_version}_"
+                                f"{person_index}"
+                            ),
+                        ).strip()
                         if add_errors.get(f"phone_{person_index}"):
                             st.error(add_errors[f"phone_{person_index}"])
                     if add_errors.get(f"name_{person_index}"):
@@ -885,8 +1174,8 @@ if menu == "Báo Cáo Ca Trực":
                     for person_index, (name, phone) in enumerate(zip(person_names, person_phones)):
                         if not name.strip():
                             validation_errors[f"name_{person_index}"] = "Họ và tên không được để trống."
-                        if not re.fullmatch(r"\d{10}", phone.strip()):
-                            validation_errors[f"phone_{person_index}"] = "Số điện thoại phải đúng 10 chữ số."
+                        if not re.fullmatch(r"\d{10,11}", phone.strip()):
+                            validation_errors[f"phone_{person_index}"] = "Số điện thoại phải đúng 10 hoặc 11 chữ số."
 
                     if validation_errors:
                         st.session_state["add_errors"] = validation_errors
