@@ -1044,10 +1044,12 @@ if menu == "Báo Cáo Ca Trực":
     project_mask = (
         (team_values == normalize_report_label(PROJECT_TEAM))
         & ~leave_mask
+        & ~supplementary_mask
     )
     traffic_safety_mask = (
         (team_values == normalize_report_label(TRAFFIC_SAFETY_TEAM))
         & ~leave_mask
+        & ~supplementary_mask
     )
     special_assignment_mask = (
         project_mask | traffic_safety_mask | supplementary_mask | leave_mask
