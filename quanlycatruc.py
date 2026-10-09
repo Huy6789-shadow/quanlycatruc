@@ -1032,8 +1032,6 @@ if menu == "Báo Cáo Ca Trực":
 
     team_values = df["bo_phan"].map(normalize_report_label)
     shift_values = df["ca"].map(normalize_report_label)
-    project_mask = team_values == normalize_report_label(PROJECT_TEAM)
-    traffic_safety_mask = team_values == normalize_report_label(TRAFFIC_SAFETY_TEAM)
     supplementary_mask = shift_values.str.startswith(
         normalize_report_label(SUPPLEMENTARY_SHIFT)
     )
@@ -1042,6 +1040,14 @@ if menu == "Báo Cáo Ca Trực":
             normalize_report_label("Nghỉ Phép"),
             normalize_report_label("Nghỉ Không Lương"),
         )
+    )
+    project_mask = (
+        (team_values == normalize_report_label(PROJECT_TEAM))
+        & ~leave_mask
+    )
+    traffic_safety_mask = (
+        (team_values == normalize_report_label(TRAFFIC_SAFETY_TEAM))
+        & ~leave_mask
     )
     special_assignment_mask = (
         project_mask | traffic_safety_mask | supplementary_mask | leave_mask
