@@ -46,3 +46,31 @@ create policy "vehicles_public_delete"
 on public.vehicles for delete
 to anon, authenticated
 using (true);
+
+-- Chạy phần này nếu bảng shift_reports đang bật RLS.
+alter table public.shift_reports enable row level security;
+
+drop policy if exists "shift_reports_public_read" on public.shift_reports;
+create policy "shift_reports_public_read"
+on public.shift_reports for select
+to public
+using (true);
+
+drop policy if exists "shift_reports_public_insert" on public.shift_reports;
+create policy "shift_reports_public_insert"
+on public.shift_reports for insert
+to public
+with check (true);
+
+drop policy if exists "shift_reports_public_update" on public.shift_reports;
+create policy "shift_reports_public_update"
+on public.shift_reports for update
+to public
+using (true)
+with check (true);
+
+drop policy if exists "shift_reports_public_delete" on public.shift_reports;
+create policy "shift_reports_public_delete"
+on public.shift_reports for delete
+to public
+using (true);

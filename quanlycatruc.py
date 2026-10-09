@@ -26,6 +26,7 @@ SHIFT_ROLE_PRIORITY = {
     "Ca Trưởng": 8,
     "Tổ Trưởng": 9,
     "Kíp Trưởng": 10,
+    "HCNS": 11,
 }
 
 REPORT_GROUP_COLORS = (
@@ -1116,7 +1117,7 @@ if menu == "Báo Cáo Ca Trực":
             role_options = [
                 "Phó Giám Đốc", "Hạt Trưởng", "Hạt Phó", "Trưởng Phòng",
                 "Phó Phòng","Trạm Phó", "Đội Trưởng", "Đội Phó", "Ca Trưởng",
-                "Tổ Trưởng", "Kíp Trưởng", "Giám Đốc", "Nhân viên",
+                "Tổ Trưởng", "Kíp Trưởng", "HCNS", "Giám Đốc", "Nhân viên",
             ]
             add_errors = st.session_state.get("add_errors", {})
             team_options = sorted(set(df.get("bo_phan", pd.Series(dtype=str)).dropna().astype(str)) | {
@@ -1270,7 +1271,16 @@ if menu == "Báo Cáo Ca Trực":
                                     "Kiểm tra bảng shift_reports và quyền INSERT/SELECT (RLS)."
                                 )
                         except Exception as error:
-                            st.error(f"Không thể lưu dữ liệu: {error}")
+                            error_text = str(error)
+                            if "42501" in error_text or "row-level security" in error_text:
+                                st.error(
+                                    "Không thể lưu dữ liệu vì Supabase đang chặn quyền INSERT "
+                                    "bởi RLS của bảng shift_reports. Hãy chạy các policy "
+                                    "shift_reports trong file vehicles_schema.sql trên "
+                                    "Supabase SQL Editor, sau đó thử lại."
+                                )
+                            else:
+                                st.error(f"Không thể lưu dữ liệu: {error}")
                         else:
                             clear_shift_form_state()
                             st.success("Đã thêm dữ liệu thành công vào Database!")
