@@ -20,10 +20,12 @@ SHIFT_ROLE_PRIORITY = {
     "Hạt Phó": 2,
     "Trưởng Phòng": 3,
     "Phó Phòng": 4,
-    "Đội Trưởng": 5,
-    "Đội Phó": 6,
-    "Ca Trưởng": 7,
-    "Tổ Trưởng": 8,
+    "Trạm Phó": 5,
+    "Đội Trưởng": 6,
+    "Đội Phó": 7,
+    "Ca Trưởng": 8,
+    "Tổ Trưởng": 9,
+    "Kíp Trưởng": 10,
 }
 
 REPORT_GROUP_COLORS = (
@@ -33,6 +35,14 @@ REPORT_GROUP_COLORS = (
     ("#f8efff", "#6b2c91"),
     ("#fff0f0", "#9b2525"),
 )
+
+PROJECT_TEAM = "Dự Án Gói Tháo Dỡ ITs"
+TRAFFIC_SAFETY_TEAM = "Đội ĐBGT"
+SUPPLEMENTARY_SHIFT = "Nhân sự tăng cường"
+
+
+def normalize_report_label(value):
+    return " ".join(str(value or "").split()).casefold()
 
 st.set_page_config(page_title="Quản lý vận hành", layout="wide", initial_sidebar_state="collapsed")
 
@@ -435,6 +445,11 @@ def next_available_id(records):
     return next_id
 
 
+def vehicle_km_value(value):
+    parsed = pd.to_numeric(value, errors="coerce")
+    return int(parsed) if pd.notna(parsed) and parsed >= 0 else 0
+
+
 def clear_shift_form_state():
     keys = ["add_errors"]
     keys.extend(
@@ -753,10 +768,15 @@ if st.session_state.is_admin:
                 ],
                 "Phương tiện": [
                     ("ngay", "NGÀY"),
+                    ("ngay_nhan_xe", "NGÀY NHẬN XE"),
                     ("bien_so", "BIỂN SỐ"),
                     ("loai_xe", "LOẠI XE"),
                     ("tinh_trang", "TÌNH TRẠNG"),
                     ("vi_tri", "VỊ TRÍ HOẠT ĐỘNG"),
+                    ("so_km_hien_tai", "SỐ KM HIỆN TẠI"),
+                    ("ngay_bao_duong_gan_nhat", "NGÀY BẢO DƯỠNG GẦN NHẤT"),
+                    ("so_km_bao_duong_gan_nhat", "SỐ KM BẢO DƯỠNG GẦN NHẤT"),
+                    ("so_km_bao_duong_du_kien", "SỐ KM BẢO DƯỠNG DỰ KIẾN"),
                 ],
             }
             export_frames = {}
@@ -1009,37 +1029,75 @@ if menu == "Báo Cáo Ca Trực":
         """
         st.markdown(table_html, unsafe_allow_html=True)
 
-    ca1_tab, ca2_tab, ca3_tab, leave_tab = st.tabs(["CA 1", "CA 2", "CA 3", "NHÂN SỰ NGHỈ PHÉP"])
+    team_values = df["bo_phan"].map(normalize_report_label)
+    shift_values = df["ca"].map(normalize_report_label)
+    project_mask = team_values == normalize_report_label(PROJECT_TEAM)
+    traffic_safety_mask = team_values == normalize_report_label(TRAFFIC_SAFETY_TEAM)
+    supplementary_mask = shift_values.str.startswith(
+        normalize_report_label(SUPPLEMENTARY_SHIFT)
+    )
+    leave_mask = shift_values.str.startswith(
+        (
+            normalize_report_label("Nghỉ Phép"),
+            normalize_report_label("Nghỉ Không Lương"),
+        )
+    )
+    special_assignment_mask = (
+        project_mask | traffic_safety_mask | supplementary_mask | leave_mask
+    )
+
+    ca1_tab, ca2_tab, ca3_tab, project_tab, traffic_safety_tab, leave_tab, supplementary_tab = st.tabs(
+        [
+            "CA 1", "CA 2", "CA 3", "DỰ ÁN", "ĐẢM BẢO ATGT",
+            "NGHỈ PHÉP, NGHỈ KHÔNG LƯƠNG", "NHÂN SỰ TĂNG CƯỜNG",
+        ]
+    )
     with ca1_tab:
         st.caption("Danh sách nhân sự trực HC, Ca 1 và Ca gãy.")
         if not df.empty:
-            ca1_df = df[df["ca"].fillna("").astype(str).str.startswith(("Ca 1", "Ca gãy", "HC"))]
+            ca1_df = df[
+                shift_values.str.startswith(("ca 1", "ca gãy", "hc"))
+                & ~special_assignment_mask
+            ]
             render_schedule_table(ca1_df)
         else:
             st.info("Chưa có dữ liệu.")
     with ca2_tab:
         st.caption("Danh sách nhân sự trực Ca 2.")
         if not df.empty:
-            ca2_df = df[df["ca"].fillna("").astype(str).str.startswith("Ca 2")]
+            ca2_df = df[shift_values.str.startswith("ca 2") & ~special_assignment_mask]
             render_schedule_table(ca2_df)
         else:
             st.info("Chưa có dữ liệu.")
     with ca3_tab:
         st.caption("Danh sách nhân sự trực Ca 3.")
         if not df.empty:
-            ca3_df = df[df["ca"].fillna("").astype(str).str.startswith("Ca 3")]
+            ca3_df = df[shift_values.str.startswith("ca 3") & ~special_assignment_mask]
             render_schedule_table(ca3_df)
+        else:
+            st.info("Chưa có dữ liệu.")
+    with project_tab:
+        st.caption(f"Danh sách nhân sự thuộc bộ phận {PROJECT_TEAM}.")
+        if not df.empty:
+            render_schedule_table(df[project_mask])
+        else:
+            st.info("Chưa có dữ liệu.")
+    with traffic_safety_tab:
+        st.caption(f"Danh sách nhân sự thuộc bộ phận {TRAFFIC_SAFETY_TEAM}.")
+        if not df.empty:
+            render_schedule_table(df[traffic_safety_mask])
         else:
             st.info("Chưa có dữ liệu.")
     with leave_tab:
         st.caption("Theo dõi nhân sự nghỉ phép và nghỉ không lương.")
         if not df.empty:
-            leave_df = df[
-                df["ca"].fillna("").astype(str).str.startswith(
-                    ("Nghỉ Phép", "Nghỉ Không Lương")
-                )
-            ]
-            render_schedule_table(leave_df)
+            render_schedule_table(df[leave_mask])
+        else:
+            st.info("Chưa có dữ liệu.")
+    with supplementary_tab:
+        st.caption("Danh sách nhân sự tăng cường.")
+        if not df.empty:
+            render_schedule_table(df[supplementary_mask])
         else:
             st.info("Chưa có dữ liệu.")
 
@@ -1057,15 +1115,15 @@ if menu == "Báo Cáo Ca Trực":
             shift_form_version = st.session_state.get("shift_form_version", 0)
             role_options = [
                 "Phó Giám Đốc", "Hạt Trưởng", "Hạt Phó", "Trưởng Phòng",
-                "Phó Phòng", "Đội Trưởng", "Đội Phó", "Ca Trưởng",
-                "Tổ Trưởng", "Giám Đốc", "Nhân viên",
+                "Phó Phòng","Trạm Phó", "Đội Trưởng", "Đội Phó", "Ca Trưởng",
+                "Tổ Trưởng", "Kíp Trưởng", "Giám Đốc", "Nhân viên",
             ]
             add_errors = st.session_state.get("add_errors", {})
             team_options = sorted(set(df.get("bo_phan", pd.Series(dtype=str)).dropna().astype(str)) | {
                 "Tổ ITS", "Đội PCCC&CHCN TLMT", "Đội PCCC&CHCN TPHCM-TL",
                 "Hạt QLĐB", "TTP", "Tổ Điện", "Hotline", "Tuần Đường",
                 "Ban Lãnh Đạo", "Phòng Tổng Hợp", "GSHK",
-                "Đội ĐBGT", "Lái Xe",
+                TRAFFIC_SAFETY_TEAM, PROJECT_TEAM, "Lái Xe",
             })
             location_options = sorted(set(df.get("vi_tri", pd.Series(dtype=str)).dropna().astype(str)) | {
                 "TMC TL-MT", "TMC TP.HCM-TL", "Tuyến cao tốc TL-MT", "Tuyến cao tốc TP.HCM-TL",
@@ -1074,7 +1132,8 @@ if menu == "Báo Cáo Ca Trực":
             ca_options = [
                 "Ca 1 (06h-14h)", "Ca 2 (14h-22h)", "Ca 3 (22h-06h)",
                 "Ca gãy (10h-18h)",
-                "HC (Hành Chính)", "Nghỉ Phép", "Nghỉ Không Lương"
+                "HC (Hành Chính)", "Nhân sự tăng cường", "Nghỉ Phép",
+                "Nghỉ Không Lương",
             ]
 
             row_one = st.columns(3)
@@ -1109,14 +1168,6 @@ if menu == "Báo Cáo Ca Trực":
                 )
                 if add_errors.get("ca"):
                     st.error(add_errors["ca"])
-            with row_two[1]:
-                r_chucvu = st.selectbox(
-                    "Chức vụ", ["", *role_options], index=0,
-                    format_func=lambda value: value or " ",
-                    key=f"add_role_{shift_form_version}",
-                )
-                if add_errors.get("chuc_vu"):
-                    st.error(add_errors["chuc_vu"])
             with row_two[2]:
                 r_songuoi = st.number_input(
                     "Số người", min_value=1, max_value=50, value=1, step=1,
@@ -1126,9 +1177,10 @@ if menu == "Báo Cáo Ca Trực":
             with st.form("add_form"):
                 person_names = []
                 person_phones = []
+                person_roles = []
                 for person_index in range(r_songuoi):
                     st.markdown(f"**Nhân sự {person_index + 1}**")
-                    person_col1, person_col2 = st.columns(2)
+                    person_col1, person_col2, person_col3 = st.columns(3)
                     with person_col1:
                         person_name = st.text_input(
                             "Họ và tên",
@@ -1145,10 +1197,24 @@ if menu == "Báo Cáo Ca Trực":
                         ).strip()
                         if add_errors.get(f"phone_{person_index}"):
                             st.error(add_errors[f"phone_{person_index}"])
+                    with person_col3:
+                        person_role = st.selectbox(
+                            "Chức vụ",
+                            ["", *role_options],
+                            index=0,
+                            format_func=lambda value: value or " ",
+                            key=(
+                                f"add_person_role_{shift_form_version}_"
+                                f"{person_index}"
+                            ),
+                        )
+                        if add_errors.get(f"role_{person_index}"):
+                            st.error(add_errors[f"role_{person_index}"])
                     if add_errors.get(f"name_{person_index}"):
                         st.error(add_errors[f"name_{person_index}"])
                     person_names.append(person_name)
                     person_phones.append(person_phone)
+                    person_roles.append(person_role)
 
                 r_noidung = st.text_area(
                     "Nội dung công việc",
@@ -1167,15 +1233,17 @@ if menu == "Báo Cáo Ca Trực":
                         validation_errors["bo_phan"] = "Vui lòng chọn Đội / Bộ phận."
                     if not r_vitri:
                         validation_errors["vi_tri"] = "Vui lòng chọn Vị trí trực."
-                    if not r_chucvu:
-                        validation_errors["chuc_vu"] = "Vui lòng chọn Chức vụ."
                     if not r_noidung.strip():
                         validation_errors["noi_dung"] = "Nội dung công việc không được để trống."
-                    for person_index, (name, phone) in enumerate(zip(person_names, person_phones)):
+                    for person_index, (name, phone, role) in enumerate(
+                        zip(person_names, person_phones, person_roles)
+                    ):
                         if not name.strip():
                             validation_errors[f"name_{person_index}"] = "Họ và tên không được để trống."
                         if not re.fullmatch(r"\d{10,11}", phone.strip()):
                             validation_errors[f"phone_{person_index}"] = "Số điện thoại phải đúng 10 hoặc 11 chữ số."
+                        if not role:
+                            validation_errors[f"role_{person_index}"] = "Vui lòng chọn Chức vụ."
 
                     if validation_errors:
                         st.session_state["add_errors"] = validation_errors
@@ -1187,10 +1255,20 @@ if menu == "Báo Cáo Ca Trực":
                                 "ngay": r_ngay.strftime("%d/%m/%Y"), "ca": r_ca,
                                 "phan_muc": "I. Phòng Vận hành",
                                 "bo_phan": r_bophan, "vi_tri": r_vitri, "ho_ten": r_hoten,
-                                "chuc_vu": r_chucvu, "so_nguoi": r_songuoi,
+                                "chuc_vu": "\n".join(person_roles), "so_nguoi": r_songuoi,
                                 "noi_dung": r_noidung, "sdt": r_sdt
                             }
-                            supabase.table("shift_reports").insert(record).execute()
+                            insert_response = (
+                                supabase.table("shift_reports")
+                                .insert(record)
+                                .select("*")
+                                .execute()
+                            )
+                            if not insert_response.data:
+                                raise RuntimeError(
+                                    "Supabase không trả về bản ghi sau khi thêm. "
+                                    "Kiểm tra bảng shift_reports và quyền INSERT/SELECT (RLS)."
+                                )
                         except Exception as error:
                             st.error(f"Không thể lưu dữ liệu: {error}")
                         else:
@@ -1202,30 +1280,226 @@ if menu == "Báo Cáo Ca Trực":
 
         with tab2:
             if data:
-                report_ids = [item["id"] for item in data]
-                selected_id = st.selectbox("Chọn ID mục cần sửa hoặc xóa", report_ids)
-                target = next((x for x in data if x["id"] == selected_id), None)
+                search_text = st.text_input(
+                    "Tìm nhanh báo cáo",
+                    placeholder="Nhập ID, họ tên, đội/bộ phận, ca hoặc ngày...",
+                    key="shift_report_edit_search",
+                ).strip().casefold()
+                filtered_reports = [
+                    item
+                    for item in data
+                    if not search_text
+                    or search_text in " ".join(
+                        str(item.get(field, ""))
+                        for field in (
+                            "id", "ngay", "ca", "ho_ten", "bo_phan",
+                            "chuc_vu", "vi_tri", "noi_dung",
+                        )
+                    ).casefold()
+                ]
+                if not filtered_reports:
+                    st.info("Không tìm thấy báo cáo phù hợp.")
+                    filtered_reports = []
+                report_ids = [item["id"] for item in filtered_reports]
+                selected_id = st.selectbox(
+                    "Chọn ID mục cần sửa hoặc xóa",
+                    report_ids,
+                    format_func=lambda value: next(
+                        (
+                            f"{value} - {item.get('ho_ten', '')} - "
+                            f"{item.get('ngay', '')}"
+                            for item in filtered_reports
+                            if item.get("id") == value
+                        ),
+                        str(value),
+                    ),
+                    key="shift_report_edit_id",
+                ) if report_ids else None
+                target = next(
+                    (x for x in filtered_reports if x["id"] == selected_id),
+                    None,
+                )
                 
                 if target:
                     with st.form("edit_form"):
-                        e_hoten = st.text_input("Họ tên", value=target["ho_ten"])
-                        e_sdt = st.text_input("Số điện thoại", value=target["sdt"])
-                        e_noidung = st.text_area("Nội dung", value=target["noi_dung"])
+                        edit_date_value = pd.to_datetime(
+                            target.get("ngay"), dayfirst=True, errors="coerce",
+                        )
+                        e_ngay = st.date_input(
+                            "Ngày làm việc",
+                            value=(
+                                edit_date_value.date()
+                                if pd.notna(edit_date_value)
+                                else date.today()
+                            ),
+                            format="DD/MM/YYYY",
+                            key=f"edit_shift_date_{selected_id}",
+                        )
+                        e_ca_options = list(ca_options)
+                        if target.get("ca") and target["ca"] not in e_ca_options:
+                            e_ca_options.append(target["ca"])
+                        e_ca = st.selectbox(
+                            "Ca trực",
+                            ["", *e_ca_options],
+                            index=(
+                                e_ca_options.index(target.get("ca")) + 1
+                                if target.get("ca") in e_ca_options else 0
+                            ),
+                            format_func=lambda value: value or " ",
+                            key=f"edit_shift_{selected_id}",
+                        )
+                        e_team_options = list(team_options)
+                        if target.get("bo_phan") and target["bo_phan"] not in e_team_options:
+                            e_team_options.append(target["bo_phan"])
+                        e_bophan = st.selectbox(
+                            "Đội / Bộ phận",
+                            ["", *e_team_options],
+                            index=(
+                                e_team_options.index(target.get("bo_phan")) + 1
+                                if target.get("bo_phan") in e_team_options else 0
+                            ),
+                            format_func=lambda value: value or " ",
+                            key=f"edit_shift_team_{selected_id}",
+                        )
+                        e_location_options = list(location_options)
+                        if target.get("vi_tri") and target["vi_tri"] not in e_location_options:
+                            e_location_options.append(target["vi_tri"])
+                        e_vitri = st.selectbox(
+                            "Vị trí trực",
+                            ["", *e_location_options],
+                            index=(
+                                e_location_options.index(target.get("vi_tri")) + 1
+                                if target.get("vi_tri") in e_location_options else 0
+                            ),
+                            format_func=lambda value: value or " ",
+                            key=f"edit_shift_location_{selected_id}",
+                        )
+                        e_chucvu = st.text_area(
+                            "Chức vụ",
+                            value=str(target.get("chuc_vu", "")),
+                            help="Nếu có nhiều nhân sự, nhập mỗi chức vụ trên một dòng tương ứng.",
+                            key=f"edit_shift_role_{selected_id}",
+                        )
+                        e_songuoi = st.number_input(
+                            "Số người", min_value=1, max_value=50,
+                            value=max(1, int(target.get("so_nguoi") or 1)),
+                            step=1,
+                            key=f"edit_shift_people_{selected_id}",
+                        )
+                        e_hoten = st.text_input(
+                            "Họ tên", value=str(target.get("ho_ten", "")),
+                            key=f"edit_shift_name_{selected_id}",
+                        )
+                        e_sdt = st.text_input(
+                            "Số điện thoại",
+                            value=str(target.get("sdt", "")),
+                            key=f"edit_shift_phone_{selected_id}",
+                        )
+                        e_noidung = st.text_area(
+                            "Nội dung công việc",
+                            value=str(target.get("noi_dung", "")),
+                            key=f"edit_shift_work_{selected_id}",
+                        )
                         
                         col_u, col_d = st.columns(2)
                         if col_u.form_submit_button("Cập nhật thay đổi"):
-                            if db_connected:
-                                supabase.table("shift_reports").update({
-                                    "ho_ten": e_hoten, "sdt": e_sdt, "noi_dung": e_noidung
-                                }).eq("id", selected_id).execute()
-                                st.success(f"Đã cập nhật ID {selected_id} thành công!")
-                                st.rerun()
+                            validation_error = None
+                            if not e_ca or not e_bophan or not e_vitri or not e_chucvu:
+                                validation_error = (
+                                    "Vui lòng nhập đủ Ca trực, Đội/Bộ phận, "
+                                    "Vị trí trực và Chức vụ."
+                                )
+                            elif not e_hoten.strip() or not e_noidung.strip():
+                                validation_error = "Họ tên và nội dung công việc không được để trống."
+                            elif any(
+                                not re.fullmatch(r"\d{10,11}", phone.strip())
+                                for phone in e_sdt.splitlines()
+                                if phone.strip()
+                            ):
+                                validation_error = (
+                                    "Mỗi số điện thoại phải có 10 hoặc 11 chữ số."
+                                )
+                            if validation_error:
+                                st.error(validation_error)
+                            elif db_connected:
+                                try:
+                                    update_payload = {
+                                        "ngay": e_ngay.strftime("%d/%m/%Y"),
+                                        "ca": e_ca,
+                                        "bo_phan": e_bophan,
+                                        "vi_tri": e_vitri,
+                                        "chuc_vu": e_chucvu.strip(),
+                                        "so_nguoi": e_songuoi,
+                                        "ho_ten": e_hoten.strip(),
+                                        "sdt": e_sdt.strip(),
+                                        "noi_dung": e_noidung.strip(),
+                                    }
+                                    (
+                                        supabase.table("shift_reports")
+                                        .update(update_payload)
+                                        .eq("id", selected_id)
+                                        .execute()
+                                    )
+                                    updated_rows = (
+                                        supabase.table("shift_reports")
+                                        .select("*")
+                                        .eq("id", selected_id)
+                                        .execute()
+                                        .data
+                                        or []
+                                    )
+                                    if not updated_rows:
+                                        raise RuntimeError(
+                                            "Không tìm thấy bản ghi sau khi cập nhật. "
+                                            "Kiểm tra ID và quyền SELECT trên Supabase."
+                                        )
+                                    saved_row = updated_rows[0]
+                                    mismatched_fields = [
+                                        field
+                                        for field, expected in update_payload.items()
+                                        if str(saved_row.get(field, "")) != str(expected)
+                                    ]
+                                    if mismatched_fields:
+                                        raise RuntimeError(
+                                            "Supabase không lưu được các trường: "
+                                            + ", ".join(mismatched_fields)
+                                            + ". Kiểm tra policy UPDATE/RLS của bảng "
+                                            "shift_reports."
+                                        )
+                                except Exception as error:
+                                    st.error(f"Không thể cập nhật ID {selected_id}: {error}")
+                                else:
+                                    saved_team = saved_row.get("bo_phan", "")
+                                    st.success(
+                                        f"Đã cập nhật ID {selected_id} thành công "
+                                        f"(Đội/Bộ phận: {saved_team})."
+                                    )
+                                    st.rerun()
+                            else:
+                                st.warning("Vui lòng cấu hình kết nối Supabase để cập nhật.")
                                 
                         if col_d.form_submit_button("Xóa mục này", type="primary"):
                             if db_connected:
-                                supabase.table("shift_reports").delete().eq("id", selected_id).execute()
-                                st.error(f"Đã xóa ID {selected_id} khỏi Database!")
-                                st.rerun()
+                                try:
+                                    delete_response = (
+                                        supabase.table("shift_reports")
+                                        .delete()
+                                        .eq("id", selected_id)
+                                        .select("id")
+                                        .execute()
+                                    )
+                                    if not delete_response.data:
+                                        raise RuntimeError(
+                                            "Supabase không trả về bản ghi sau khi xóa. "
+                                            "Kiểm tra ID hoặc quyền DELETE/SELECT (RLS)."
+                                        )
+                                except Exception as error:
+                                    st.error(f"Không thể xóa ID {selected_id}: {error}")
+                                else:
+                                    st.error(f"Đã xóa ID {selected_id} khỏi Database!")
+                                    st.rerun()
+                            else:
+                                st.warning("Vui lòng cấu hình kết nối Supabase để xóa.")
 
 # ==================== 2. QUẢN LÝ PHƯƠNG TIỆN ====================
 elif menu == "Phương Tiện":
@@ -1294,7 +1568,11 @@ elif menu == "Phương Tiện":
             vehicle_types.setdefault(plate, vehicle_type)
     vehicle_display_df = vehicle_df.copy()
     if not vehicle_display_df.empty:
-        for column in ("id", "ngay", "bien_so", "loai_xe", "tinh_trang", "vi_tri"):
+        for column in (
+            "id", "ngay", "ngay_nhan_xe", "bien_so", "loai_xe", "tinh_trang",
+            "vi_tri", "so_km_hien_tai", "ngay_bao_duong_gan_nhat",
+            "so_km_bao_duong_gan_nhat", "so_km_bao_duong_du_kien",
+        ):
             if column not in vehicle_display_df:
                 vehicle_display_df[column] = ""
         selected_vehicle_date = st.date_input(
@@ -1310,10 +1588,21 @@ elif menu == "Phương Tiện":
             key=lambda values: values.fillna("").astype(str).str.casefold(),
             kind="stable",
         )
-        vehicle_display_df = vehicle_display_df[["id", "ngay", "bien_so", "loai_xe", "tinh_trang", "vi_tri"]]
+        vehicle_display_df = vehicle_display_df[
+            [
+                "id", "ngay", "ngay_nhan_xe", "bien_so", "loai_xe", "tinh_trang",
+                "vi_tri", "so_km_hien_tai", "ngay_bao_duong_gan_nhat",
+                "so_km_bao_duong_gan_nhat", "so_km_bao_duong_du_kien",
+            ]
+        ]
         vehicle_display_df = vehicle_display_df.rename(columns={
-            "ngay": "NGÀY", "bien_so": "BIỂN SỐ", "loai_xe": "LOẠI XE",
+            "ngay": "NGÀY", "ngay_nhan_xe": "NGÀY NHẬN XE",
+            "bien_so": "BIỂN SỐ", "loai_xe": "LOẠI XE",
             "tinh_trang": "TÌNH TRẠNG", "vi_tri": "VỊ TRÍ HOẠT ĐỘNG",
+            "so_km_hien_tai": "SỐ KM HIỆN TẠI",
+            "ngay_bao_duong_gan_nhat": "NGÀY BẢO DƯỠNG GẦN NHẤT",
+            "so_km_bao_duong_gan_nhat": "SỐ KM BẢO DƯỠNG GẦN NHẤT",
+            "so_km_bao_duong_du_kien": "SỐ KM BẢO DƯỠNG DỰ KIẾN",
         })
         if not vehicle_display_df.empty:
             st.dataframe(vehicle_display_df.drop(columns=["id"]), use_container_width=True, hide_index=True)
@@ -1353,6 +1642,10 @@ elif menu == "Phương Tiện":
                     "Ngày báo cáo", value=date.today(), format="DD/MM/YYYY",
                     key=f"vehicle_add_date_{vehicle_form_version}",
                 )
+                add_received_date = st.date_input(
+                    "Ngày nhận xe", value=date.today(), format="DD/MM/YYYY",
+                    key=f"vehicle_add_received_date_{vehicle_form_version}",
+                )
                 selected_plate = st.selectbox(
                     "Biển số", ["", *known_plates],
                     format_func=lambda value: value or " ",
@@ -1380,6 +1673,23 @@ elif menu == "Phương Tiện":
                     format_func=lambda value: value or " ",
                     key=f"vehicle_add_location_{vehicle_form_version}",
                 )
+                add_current_km = st.number_input(
+                    "Số Km hiện tại", min_value=0, step=1,
+                    key=f"vehicle_add_current_km_{vehicle_form_version}",
+                )
+                add_last_service_date = st.date_input(
+                    "Ngày bảo dưỡng gần nhất", value=date.today(),
+                    format="DD/MM/YYYY",
+                    key=f"vehicle_add_last_service_date_{vehicle_form_version}",
+                )
+                add_last_service_km = st.number_input(
+                    "Số Km bảo dưỡng gần nhất", min_value=0, step=1,
+                    key=f"vehicle_add_last_service_km_{vehicle_form_version}",
+                )
+                add_expected_service_km = st.number_input(
+                    "Số Km bảo dưỡng dự kiến", min_value=0, step=1,
+                    key=f"vehicle_add_expected_service_km_{vehicle_form_version}",
+                )
 
                 if st.form_submit_button("Lưu báo cáo"):
                     if not add_plate:
@@ -1393,10 +1703,15 @@ elif menu == "Phương Tiện":
                     else:
                         record = {
                             "ngay": add_date.strftime("%d/%m/%Y"),
+                            "ngay_nhan_xe": add_received_date.strftime("%d/%m/%Y"),
                             "bien_so": add_plate,
                             "loai_xe": add_type.strip(),
                             "tinh_trang": add_status,
                             "vi_tri": add_location,
+                            "so_km_hien_tai": add_current_km,
+                            "ngay_bao_duong_gan_nhat": add_last_service_date.strftime("%d/%m/%Y"),
+                            "so_km_bao_duong_gan_nhat": add_last_service_km,
+                            "so_km_bao_duong_du_kien": add_expected_service_km,
                         }
                         if vehicle_db_available:
                             try:
@@ -1425,6 +1740,10 @@ elif menu == "Phương Tiện":
                     "Ngày báo cáo", value=date.today(), format="DD/MM/YYYY",
                     key=f"vehicle_new_date_{vehicle_form_version}",
                 )
+                new_vehicle_received_date = st.date_input(
+                    "Ngày nhận xe", value=date.today(), format="DD/MM/YYYY",
+                    key=f"vehicle_new_received_date_{vehicle_form_version}",
+                )
                 new_vehicle_plate = st.text_input(
                     "Biển số xe mới",
                     key=f"vehicle_new_plate_{vehicle_form_version}",
@@ -1444,6 +1763,23 @@ elif menu == "Phương Tiện":
                     format_func=lambda value: value or " ",
                     key=f"vehicle_new_location_{vehicle_form_version}",
                 )
+                new_vehicle_current_km = st.number_input(
+                    "Số Km hiện tại", min_value=0, step=1,
+                    key=f"vehicle_new_current_km_{vehicle_form_version}",
+                )
+                new_vehicle_last_service_date = st.date_input(
+                    "Ngày bảo dưỡng gần nhất", value=date.today(),
+                    format="DD/MM/YYYY",
+                    key=f"vehicle_new_last_service_date_{vehicle_form_version}",
+                )
+                new_vehicle_last_service_km = st.number_input(
+                    "Số Km bảo dưỡng gần nhất", min_value=0, step=1,
+                    key=f"vehicle_new_last_service_km_{vehicle_form_version}",
+                )
+                new_vehicle_expected_service_km = st.number_input(
+                    "Số Km bảo dưỡng dự kiến", min_value=0, step=1,
+                    key=f"vehicle_new_expected_service_km_{vehicle_form_version}",
+                )
 
                 if st.form_submit_button("Lưu xe mới"):
                     if not new_vehicle_plate:
@@ -1457,10 +1793,15 @@ elif menu == "Phương Tiện":
                     else:
                         new_vehicle_record = {
                             "ngay": new_vehicle_date.strftime("%d/%m/%Y"),
+                            "ngay_nhan_xe": new_vehicle_received_date.strftime("%d/%m/%Y"),
                             "bien_so": new_vehicle_plate,
                             "loai_xe": new_vehicle_type,
                             "tinh_trang": new_vehicle_status,
                             "vi_tri": new_vehicle_location,
+                            "so_km_hien_tai": new_vehicle_current_km,
+                            "ngay_bao_duong_gan_nhat": new_vehicle_last_service_date.strftime("%d/%m/%Y"),
+                            "so_km_bao_duong_gan_nhat": new_vehicle_last_service_km,
+                            "so_km_bao_duong_du_kien": new_vehicle_expected_service_km,
                         }
                         if vehicle_db_available:
                             try:
@@ -1497,6 +1838,19 @@ elif menu == "Phương Tiện":
                             format="DD/MM/YYYY",
                             key="vehicle_edit_date",
                         )
+                        edit_received_date_value = pd.to_datetime(
+                            vehicle_target.get("ngay_nhan_xe"), dayfirst=True, errors="coerce",
+                        )
+                        edit_received_date = st.date_input(
+                            "Ngày nhận xe",
+                            value=(
+                                edit_received_date_value.date()
+                                if pd.notna(edit_received_date_value)
+                                else date.today()
+                            ),
+                            format="DD/MM/YYYY",
+                            key="vehicle_edit_received_date",
+                        )
                         edit_plate = st.text_input(
                             "Biển số", value=str(vehicle_target.get("bien_so", "")),
                             key="vehicle_edit_plate",
@@ -1517,6 +1871,39 @@ elif menu == "Phương Tiện":
                             if vehicle_target.get("vi_tri") in vehicle_locations else 0,
                             key="vehicle_edit_location",
                         )
+                        edit_current_km = st.number_input(
+                            "Số Km hiện tại", min_value=0, step=1,
+                            value=vehicle_km_value(vehicle_target.get("so_km_hien_tai")),
+                            key="vehicle_edit_current_km",
+                        )
+                        edit_last_service_date_value = pd.to_datetime(
+                            vehicle_target.get("ngay_bao_duong_gan_nhat"),
+                            dayfirst=True, errors="coerce",
+                        )
+                        edit_last_service_date = st.date_input(
+                            "Ngày bảo dưỡng gần nhất",
+                            value=(
+                                edit_last_service_date_value.date()
+                                if pd.notna(edit_last_service_date_value)
+                                else date.today()
+                            ),
+                            format="DD/MM/YYYY",
+                            key="vehicle_edit_last_service_date",
+                        )
+                        edit_last_service_km = st.number_input(
+                            "Số Km bảo dưỡng gần nhất", min_value=0, step=1,
+                            value=vehicle_km_value(
+                                vehicle_target.get("so_km_bao_duong_gan_nhat")
+                            ),
+                            key="vehicle_edit_last_service_km",
+                        )
+                        edit_expected_service_km = st.number_input(
+                            "Số Km bảo dưỡng dự kiến", min_value=0, step=1,
+                            value=vehicle_km_value(
+                                vehicle_target.get("so_km_bao_duong_du_kien")
+                            ),
+                            key="vehicle_edit_expected_service_km",
+                        )
                         update_vehicle, delete_vehicle = st.columns(2)
                         update_clicked = update_vehicle.form_submit_button("Cập nhật thay đổi")
                         delete_clicked = delete_vehicle.form_submit_button("Xóa báo cáo", type="secondary")
@@ -1527,10 +1914,15 @@ elif menu == "Phương Tiện":
                         else:
                             updated_record = {
                                 "ngay": edit_date.strftime("%d/%m/%Y"),
+                                "ngay_nhan_xe": edit_received_date.strftime("%d/%m/%Y"),
                                 "bien_so": edit_plate,
                                 "loai_xe": edit_type.strip(),
                                 "tinh_trang": edit_status,
                                 "vi_tri": edit_location,
+                                "so_km_hien_tai": edit_current_km,
+                                "ngay_bao_duong_gan_nhat": edit_last_service_date.strftime("%d/%m/%Y"),
+                                "so_km_bao_duong_gan_nhat": edit_last_service_km,
+                                "so_km_bao_duong_du_kien": edit_expected_service_km,
                             }
                             if vehicle_db_available:
                                 try:
