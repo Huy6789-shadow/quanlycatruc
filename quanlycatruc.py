@@ -40,6 +40,7 @@ REPORT_GROUP_COLORS = (
 PROJECT_TEAM = "Dự Án Gói Tháo Dỡ ITs"
 TRAFFIC_SAFETY_TEAM = "Đội ĐBGT"
 SUPPLEMENTARY_SHIFT = "Nhân sự tăng cường"
+STAFF_DIRECTORY_MENU = "Danh Bạ Nhân Sự"
 
 
 def normalize_report_label(value):
@@ -467,56 +468,6 @@ def vehicle_km_value(value):
     return int(parsed) if pd.notna(parsed) and parsed >= 0 else 0
 
 
-def insert_vehicle_record(supabase_client, record):
-    """Insert a vehicle while remaining compatible with an older table schema."""
-    pending_record = dict(record)
-    dropped_columns = []
-    while pending_record:
-        try:
-            supabase_client.table("vehicles").insert(pending_record).execute()
-            return dropped_columns
-        except Exception as error:
-            error_text = str(error)
-            missing_column = re.search(
-                r"""['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s+column\s+of\s+['"]?vehicles['"]?""",
-                error_text,
-            )
-            if "PGRST204" not in error_text or not missing_column:
-                raise
-            column_name = missing_column.group(1)
-            if column_name not in pending_record:
-                raise
-            dropped_columns.append(column_name)
-            pending_record.pop(column_name)
-    raise RuntimeError("Bảng vehicles không có các cột dữ liệu bắt buộc.")
-
-
-def update_vehicle_record(supabase_client, record, vehicle_id):
-    """Update a vehicle while remaining compatible with an older table schema."""
-    pending_record = dict(record)
-    dropped_columns = []
-    while pending_record:
-        try:
-            supabase_client.table("vehicles").update(pending_record).eq(
-                "id", vehicle_id
-            ).execute()
-            return dropped_columns
-        except Exception as error:
-            error_text = str(error)
-            missing_column = re.search(
-                r"""['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s+column\s+of\s+['"]?vehicles['"]?""",
-                error_text,
-            )
-            if "PGRST204" not in error_text or not missing_column:
-                raise
-            column_name = missing_column.group(1)
-            if column_name not in pending_record:
-                raise
-            dropped_columns.append(column_name)
-            pending_record.pop(column_name)
-    raise RuntimeError("Bảng vehicles không có các cột dữ liệu bắt buộc.")
-
-
 def clear_shift_form_state():
     keys = ["add_errors"]
     keys.extend(
@@ -547,6 +498,29 @@ def clear_vehicle_form_state():
         st.session_state.pop(key, None)
     st.session_state["vehicle_form_version"] = (
         st.session_state.get("vehicle_form_version", 0) + 1
+    )
+
+
+def load_staff_directory():
+    if not db_connected:
+        return []
+    try:
+        response = supabase.table("staff_directory").select("*").order("name").execute()
+        return response.data or []
+    except Exception as error:
+        if "PGRST205" not in str(error) and "public.staff_directory" not in str(error):
+            st.warning(f"Không thể đọc danh bạ nhân sự: {error}")
+        return []
+
+
+def sync_staff_phone(name_key, phone_key, staff_directory):
+    selected_id = st.session_state.get(name_key)
+    selected_staff = next(
+        (item for item in staff_directory if item.get("id") == selected_id),
+        None,
+    )
+    st.session_state[phone_key] = (
+        str(selected_staff.get("phone", "")).strip() if selected_staff else ""
     )
 
 
@@ -644,7 +618,12 @@ if "tab_accounts" not in st.session_state:
         "Báo Cáo Ca Trực": {"username": "tab1", "password": "123"},
         "Phương Tiện": {"username": "tab2", "password": "123"},
         "Nhiên Liệu": {"username": "tab3", "password": "123"},
+        STAFF_DIRECTORY_MENU: {"username": "tab1", "password": "123"},
     }
+else:
+    st.session_state.tab_accounts.setdefault(
+        STAFF_DIRECTORY_MENU, {"username": "tab1", "password": "123"}
+    )
 
 if not st.session_state.logged_in_user:
     saved_username = verified_auth_username(st.context.cookies.get(AUTH_COOKIE_NAME))
@@ -687,6 +666,8 @@ render_agency_header(header_date.strftime("%d/%m/%Y"))
 menu_column, login_column = st.columns([4, 1], gap="small")
 with menu_column:
     st.markdown('<div class="main-navigation">', unsafe_allow_html=True)
+    if st.session_state.get("main_navigation") == STAFF_DIRECTORY_MENU:
+        st.session_state.main_navigation = "Báo Cáo Ca Trực"
     menu = st.radio(
         "Chức năng",
         ["Báo Cáo Ca Trực", "Phương Tiện", "Nhiên Liệu"],
@@ -992,6 +973,132 @@ can_edit_tab = (
     )
 )
 
+staff_directory = load_staff_directory()
+
+if menu == STAFF_DIRECTORY_MENU:
+    st.markdown(
+        '<div class="section-caption">DANH BẠ NHÂN SỰ</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Danh bạ được dùng để gợi ý và điền số điện thoại khi lập báo cáo ca trực."
+    )
+    if not can_edit_tab:
+        st.info("Bạn cần đăng nhập bằng tài khoản được cấp cho mục này để chỉnh sửa danh bạ.")
+    else:
+        manage_staff_tab, add_staff_tab = st.tabs(["Sửa / Xóa", "Thêm nhân sự"])
+        with add_staff_tab:
+            with st.form("add_staff_directory"):
+                staff_name = st.text_input("Họ và tên")
+                staff_phone = st.text_input(
+                    "Số điện thoại (10 hoặc 11 chữ số)", max_chars=11
+                )
+                if st.form_submit_button("Thêm vào danh bạ"):
+                    normalized_name = " ".join(staff_name.split())
+                    normalized_phone = staff_phone.strip()
+                    duplicate = any(
+                        str(item.get("name", "")).casefold() == normalized_name.casefold()
+                        and str(item.get("phone", "")).strip() == normalized_phone
+                        for item in staff_directory
+                    )
+                    if not normalized_name:
+                        st.error("Họ và tên không được để trống.")
+                    elif not re.fullmatch(r"\d{10,11}", normalized_phone):
+                        st.error("Số điện thoại phải đúng 10 hoặc 11 chữ số.")
+                    elif duplicate:
+                        st.error("Nhân sự này đã có trong danh bạ.")
+                    elif not db_connected:
+                        st.warning("Vui lòng cấu hình kết nối Supabase để lưu danh bạ.")
+                    else:
+                        try:
+                            supabase.table("staff_directory").insert(
+                                {"name": normalized_name, "phone": normalized_phone}
+                            ).execute()
+                        except Exception as error:
+                            st.error(f"Không thể thêm nhân sự: {error}")
+                        else:
+                            st.success("Đã thêm nhân sự vào danh bạ.")
+                            st.rerun()
+
+        with manage_staff_tab:
+            if not staff_directory:
+                st.info(
+                    "Chưa có dữ liệu danh bạ. Nếu bảng staff_directory chưa tồn tại, "
+                    "hãy chạy phần SQL tương ứng trong vehicles_schema.sql."
+                )
+            else:
+                staff_options = {
+                    item.get("id"): item for item in staff_directory if item.get("id") is not None
+                }
+                selected_staff_id = st.selectbox(
+                    "Chọn nhân sự",
+                    list(staff_options),
+                    format_func=lambda value: (
+                        f"{staff_options[value].get('name', '')} - "
+                        f"{staff_options[value].get('phone', '')}"
+                    ),
+                    key="staff_directory_selected",
+                )
+                selected_staff = staff_options[selected_staff_id]
+                with st.form("edit_staff_directory"):
+                    edited_staff_name = st.text_input(
+                        "Họ và tên", value=str(selected_staff.get("name", ""))
+                    )
+                    edited_staff_phone = st.text_input(
+                        "Số điện thoại",
+                        value=str(selected_staff.get("phone", "")),
+                        max_chars=11,
+                    )
+                    save_staff, delete_staff = st.columns(2)
+                    with save_staff:
+                        save_staff_clicked = st.form_submit_button("Lưu thay đổi")
+                    with delete_staff:
+                        delete_staff_clicked = st.form_submit_button(
+                            "Xóa nhân sự", type="secondary"
+                        )
+                    if save_staff_clicked or delete_staff_clicked:
+                        if not db_connected:
+                            st.warning("Vui lòng cấu hình kết nối Supabase để lưu danh bạ.")
+                        elif delete_staff_clicked:
+                            try:
+                                supabase.table("staff_directory").delete().eq(
+                                    "id", selected_staff_id
+                                ).execute()
+                            except Exception as error:
+                                st.error(f"Không thể xóa nhân sự: {error}")
+                            else:
+                                st.success("Đã xóa nhân sự khỏi danh bạ.")
+                                st.rerun()
+                        else:
+                            normalized_name = " ".join(edited_staff_name.split())
+                            normalized_phone = edited_staff_phone.strip()
+                            duplicate = any(
+                                item.get("id") != selected_staff_id
+                                and str(item.get("name", "")).casefold()
+                                == normalized_name.casefold()
+                                and str(item.get("phone", "")).strip() == normalized_phone
+                                for item in staff_directory
+                            )
+                            if not normalized_name:
+                                st.error("Họ và tên không được để trống.")
+                            elif not re.fullmatch(r"\d{10,11}", normalized_phone):
+                                st.error("Số điện thoại phải đúng 10 hoặc 11 chữ số.")
+                            elif duplicate:
+                                st.error("Họ và tên này đã có trong danh bạ.")
+                            else:
+                                try:
+                                    supabase.table("staff_directory").update(
+                                        {
+                                            "name": normalized_name,
+                                            "phone": normalized_phone,
+                                        }
+                                    ).eq("id", selected_staff_id).execute()
+                                except Exception as error:
+                                    st.error(f"Không thể cập nhật nhân sự: {error}")
+                                else:
+                                    st.success("Đã cập nhật danh bạ.")
+                                    st.rerun()
+
 # ==================== 1. QUẢN LÝ BÁO CÁO CA TRỰC ====================
 if menu == "Báo Cáo Ca Trực":
     # Lấy dữ liệu thật từ Database (Bảng: shift_reports)
@@ -1249,30 +1356,80 @@ if menu == "Báo Cáo Ca Trực":
                     key=f"add_people_count_{shift_form_version}",
                 )
 
-            with st.form("add_form"):
-                person_names = []
-                person_phones = []
-                person_roles = []
-                for person_index in range(r_songuoi):
-                    st.markdown(f"**Nhân sự {person_index + 1}**")
-                    person_col1, person_col2, person_col3 = st.columns(3)
-                    with person_col1:
+            directory_options = [
+                item for item in staff_directory
+                if str(item.get("name", "")).strip()
+                and item.get("id") is not None
+            ]
+            directory_by_id = {
+                item["id"]: item for item in directory_options
+            }
+            person_names = []
+            for person_index in range(r_songuoi):
+                st.markdown(f"**Nhân sự {person_index + 1}**")
+                person_col1 = st.columns(3)[0]
+                person_name_key = f"add_person_name_{shift_form_version}_{person_index}"
+                person_phone_key = f"add_person_phone_{shift_form_version}_{person_index}"
+                with person_col1:
+                    selected_person_name = st.selectbox(
+                        "Họ và tên",
+                        [None, *directory_by_id, "Nhập tên ngoài danh bạ"],
+                        format_func=lambda value: (
+                            " " if value is None
+                            else (
+                                (
+                                    f"{directory_by_id[value].get('name', '')} - "
+                                    f"{directory_by_id[value].get('phone', '')}"
+                                )
+                                if value in directory_by_id
+                                else value
+                            )
+                        ),
+                        key=person_name_key,
+                        on_change=sync_staff_phone,
+                        args=(person_name_key, person_phone_key, staff_directory),
+                    )
+                    if selected_person_name == "Nhập tên ngoài danh bạ":
                         person_name = st.text_input(
-                            "Họ và tên",
-                            key=f"add_person_name_{shift_form_version}_{person_index}",
-                        ).strip()
-                    with person_col2:
-                        person_phone = st.text_input(
-                            "Số điện thoại (10 hoặc 11 chữ số)",
-                            max_chars=11,
+                            "Nhập họ và tên",
                             key=(
-                                f"add_person_phone_{shift_form_version}_"
+                                f"add_person_custom_name_{shift_form_version}_"
                                 f"{person_index}"
                             ),
                         ).strip()
+                    elif selected_person_name in directory_by_id:
+                        person_name = str(
+                            directory_by_id[selected_person_name].get("name", "")
+                        ).strip()
+                    else:
+                        person_name = ""
+                    if add_errors.get(f"name_{person_index}"):
+                        st.error(add_errors[f"name_{person_index}"])
+                person_names.append(person_name)
+
+            with st.form("add_form"):
+                person_phones = []
+                person_roles = []
+                for person_index, person_name in enumerate(person_names):
+                    person_col1, person_col2 = st.columns(2)
+                    directory_phone = (
+                        str(directory_by_id[selected_person_name].get("phone", "")).strip()
+                        if selected_person_name in directory_by_id
+                        else ""
+                    )
+                    if person_phone_key not in st.session_state:
+                        st.session_state[person_phone_key] = directory_phone
+                    with person_col1:
+                        person_phone = st.text_input(
+                            "Số điện thoại (10 hoặc 11 chữ số)",
+                            max_chars=11,
+                            key=person_phone_key,
+                        ).strip()
+                        if not person_phone and directory_phone:
+                            person_phone = directory_phone
                         if add_errors.get(f"phone_{person_index}"):
                             st.error(add_errors[f"phone_{person_index}"])
-                    with person_col3:
+                    with person_col2:
                         person_role = st.selectbox(
                             "Chức vụ",
                             ["", *role_options],
@@ -1285,9 +1442,6 @@ if menu == "Báo Cáo Ca Trực":
                         )
                         if add_errors.get(f"role_{person_index}"):
                             st.error(add_errors[f"role_{person_index}"])
-                    if add_errors.get(f"name_{person_index}"):
-                        st.error(add_errors[f"name_{person_index}"])
-                    person_names.append(person_name)
                     person_phones.append(person_phone)
                     person_roles.append(person_role)
 
@@ -1644,10 +1798,6 @@ elif menu == "Phương Tiện":
         vehicle_data = st.session_state.vehicle_reports
         st.warning("Chưa cấu hình Supabase. Dữ liệu phương tiện hiện chỉ lưu trong phiên làm việc.")
 
-    vehicle_schema_warning = st.session_state.pop("vehicle_schema_warning", None)
-    if vehicle_schema_warning:
-        st.warning(vehicle_schema_warning)
-
     vehicle_df = pd.DataFrame(vehicle_data)
     for item in vehicle_data:
         plate = str(item.get("bien_so", "")).strip()
@@ -1803,16 +1953,17 @@ elif menu == "Phương Tiện":
                         }
                         if vehicle_db_available:
                             try:
-                                dropped_columns = insert_vehicle_record(supabase, record)
+                                supabase.table("vehicles").insert(record).execute()
                             except Exception as error:
-                                st.error(f"Không thể lưu báo cáo phương tiện: {error}")
-                            else:
-                                if dropped_columns:
-                                    st.session_state.vehicle_schema_warning = (
-                                        "Đã lưu báo cáo, nhưng bảng vehicles đang thiếu "
-                                        f"cột: {', '.join(dropped_columns)}. "
-                                        "Hãy chạy vehicles_schema.sql để lưu đủ dữ liệu."
+                                if "PGRST204" in str(error):
+                                    st.error(
+                                        "Không thể lưu đủ dữ liệu vì bảng vehicles chưa "
+                                        "đồng bộ cột. Hãy chạy toàn bộ vehicles_schema.sql "
+                                        f"trong Supabase SQL Editor. Chi tiết: {error}"
                                     )
+                                else:
+                                    st.error(f"Không thể lưu báo cáo phương tiện: {error}")
+                            else:
                                 clear_vehicle_form_state()
                                 st.success("Đã thêm báo cáo phương tiện.")
                                 st.rerun()
@@ -1899,18 +2050,17 @@ elif menu == "Phương Tiện":
                         }
                         if vehicle_db_available:
                             try:
-                                dropped_columns = insert_vehicle_record(
-                                    supabase, new_vehicle_record
-                                )
+                                supabase.table("vehicles").insert(new_vehicle_record).execute()
                             except Exception as error:
-                                st.error(f"Không thể lưu xe mới: {error}")
-                            else:
-                                if dropped_columns:
-                                    st.session_state.vehicle_schema_warning = (
-                                        "Đã lưu xe mới, nhưng bảng vehicles đang thiếu "
-                                        f"cột: {', '.join(dropped_columns)}. "
-                                        "Hãy chạy vehicles_schema.sql để lưu đủ dữ liệu."
+                                if "PGRST204" in str(error):
+                                    st.error(
+                                        "Không thể lưu đủ dữ liệu vì bảng vehicles chưa "
+                                        "đồng bộ cột. Hãy chạy toàn bộ vehicles_schema.sql "
+                                        f"trong Supabase SQL Editor. Chi tiết: {error}"
                                     )
+                                else:
+                                    st.error(f"Không thể lưu xe mới: {error}")
+                            else:
                                 clear_vehicle_form_state()
                                 st.success("Đã thêm xe mới.")
                                 st.rerun()
@@ -2028,18 +2178,22 @@ elif menu == "Phương Tiện":
                             }
                             if vehicle_db_available:
                                 try:
-                                    dropped_columns = update_vehicle_record(
-                                        supabase, updated_record, selected_vehicle_id
-                                    )
+                                    supabase.table("vehicles").update(updated_record).eq(
+                                        "id", selected_vehicle_id
+                                    ).execute()
                                 except Exception as error:
-                                    st.error(f"Không thể cập nhật báo cáo phương tiện: {error}")
-                                else:
-                                    if dropped_columns:
-                                        st.session_state.vehicle_schema_warning = (
-                                            "Đã cập nhật báo cáo, nhưng bảng vehicles đang thiếu "
-                                            f"cột: {', '.join(dropped_columns)}. "
-                                            "Hãy chạy vehicles_schema.sql để lưu đủ dữ liệu."
+                                    if "PGRST204" in str(error):
+                                        st.error(
+                                            "Không thể cập nhật đủ dữ liệu vì bảng vehicles "
+                                            "chưa đồng bộ cột. Hãy chạy toàn bộ "
+                                            "vehicles_schema.sql trong Supabase SQL Editor. "
+                                            f"Chi tiết: {error}"
                                         )
+                                    else:
+                                        st.error(
+                                            f"Không thể cập nhật báo cáo phương tiện: {error}"
+                                        )
+                                else:
                                     st.success("Đã cập nhật báo cáo phương tiện.")
                                     st.rerun()
                             else:
