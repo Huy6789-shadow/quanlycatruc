@@ -669,11 +669,17 @@ render_agency_header(header_date.strftime("%d/%m/%Y"))
 menu_column, login_column = st.columns([4, 1], gap="small")
 with menu_column:
     st.markdown('<div class="main-navigation">', unsafe_allow_html=True)
-    if st.session_state.get("main_navigation") == STAFF_DIRECTORY_MENU:
+    navigation_options = ["Báo Cáo Ca Trực", "Phương Tiện", "Nhiên Liệu"]
+    if st.session_state.is_admin:
+        navigation_options.append(STAFF_DIRECTORY_MENU)
+    if (
+        st.session_state.get("main_navigation") == STAFF_DIRECTORY_MENU
+        and not st.session_state.is_admin
+    ):
         st.session_state.main_navigation = "Báo Cáo Ca Trực"
     menu = st.radio(
         "Chức năng",
-        ["Báo Cáo Ca Trực", "Phương Tiện", "Nhiên Liệu"],
+        navigation_options,
         horizontal=True,
         label_visibility="collapsed",
         key="main_navigation",
