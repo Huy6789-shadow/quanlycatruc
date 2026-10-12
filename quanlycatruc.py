@@ -409,13 +409,23 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
     div[role="tablist"] > div[role="tab"],
     div[data-baseweb="tab-list"] button[data-baseweb="tab"],
     div[data-baseweb="tab-list"] [role="tab"] {
-        flex:0 0 4.25rem !important;
-        min-width:4.25rem !important;
-        font-size:.58rem !important;
+        flex:0 0 3.65rem !important;
+        min-width:3.65rem !important;
+        max-width:3.65rem !important;
+        font-size:.48rem !important;
         line-height:1.05 !important;
-        padding:.4rem .12rem !important;
+        padding:.32rem .08rem !important;
         white-space:normal !important;
+        overflow-wrap:anywhere !important;
         text-align:center !important;
+    }
+    div[role="tablist"] button[role="tab"] *,
+    div[role="tablist"] > div[role="tab"] *,
+    div[data-baseweb="tab-list"] [role="tab"] * {
+        font-size:inherit !important;
+        line-height:inherit !important;
+        white-space:inherit !important;
+        overflow-wrap:inherit !important;
     }
     div[role="tablist"],
     div[data-baseweb="tab-list"] {
@@ -426,7 +436,8 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
     div[role="tablist"] > div,
     div[data-baseweb="tab-list"] > div {
         flex:0 0 auto !important;
-        min-width:4.25rem !important;
+        min-width:3.65rem !important;
+        max-width:3.65rem !important;
     }
     .schedule-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
     .schedule-table {
