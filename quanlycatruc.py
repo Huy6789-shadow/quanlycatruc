@@ -1365,10 +1365,12 @@ if menu == "Báo Cáo Ca Trực":
                 item["id"]: item for item in directory_options
             }
             person_names = []
+            person_phones = []
+            person_roles = []
             person_selections = []
             for person_index in range(r_songuoi):
                 st.markdown(f"**Nhân sự {person_index + 1}**")
-                person_col1 = st.columns(3)[0]
+                person_col1, person_col2, person_col3 = st.columns(3)
                 person_name_key = f"add_person_name_{shift_form_version}_{person_index}"
                 person_phone_key = f"add_person_phone_{shift_form_version}_{person_index}"
                 with person_col1:
@@ -1408,49 +1410,40 @@ if menu == "Báo Cáo Ca Trực":
                         st.error(add_errors[f"name_{person_index}"])
                 person_names.append(person_name)
                 person_selections.append(selected_person_name)
+                directory_phone = (
+                    str(directory_by_id[selected_person_name].get("phone", "")).strip()
+                    if selected_person_name in directory_by_id
+                    else ""
+                )
+                if person_phone_key not in st.session_state:
+                    st.session_state[person_phone_key] = directory_phone
+                with person_col2:
+                    person_phone = st.text_input(
+                        "Số điện thoại (10 hoặc 11 chữ số)",
+                        max_chars=11,
+                        key=person_phone_key,
+                    ).strip()
+                    if not person_phone and directory_phone:
+                        person_phone = directory_phone
+                    if add_errors.get(f"phone_{person_index}"):
+                        st.error(add_errors[f"phone_{person_index}"])
+                with person_col3:
+                    person_role = st.selectbox(
+                        "Chức vụ",
+                        ["", *role_options],
+                        index=0,
+                        format_func=lambda value: value or " ",
+                        key=(
+                            f"add_person_role_{shift_form_version}_"
+                            f"{person_index}"
+                        ),
+                    )
+                    if add_errors.get(f"role_{person_index}"):
+                        st.error(add_errors[f"role_{person_index}"])
+                person_phones.append(person_phone)
+                person_roles.append(person_role)
 
             with st.form("add_form"):
-                person_phones = []
-                person_roles = []
-                for person_index, person_name in enumerate(person_names):
-                    person_col1, person_col2 = st.columns(2)
-                    person_phone_key = (
-                        f"add_person_phone_{shift_form_version}_{person_index}"
-                    )
-                    selected_person_name = person_selections[person_index]
-                    directory_phone = (
-                        str(directory_by_id[selected_person_name].get("phone", "")).strip()
-                        if selected_person_name in directory_by_id
-                        else ""
-                    )
-                    if person_phone_key not in st.session_state:
-                        st.session_state[person_phone_key] = directory_phone
-                    with person_col1:
-                        person_phone = st.text_input(
-                            "Số điện thoại (10 hoặc 11 chữ số)",
-                            max_chars=11,
-                            key=person_phone_key,
-                        ).strip()
-                        if not person_phone and directory_phone:
-                            person_phone = directory_phone
-                        if add_errors.get(f"phone_{person_index}"):
-                            st.error(add_errors[f"phone_{person_index}"])
-                    with person_col2:
-                        person_role = st.selectbox(
-                            "Chức vụ",
-                            ["", *role_options],
-                            index=0,
-                            format_func=lambda value: value or " ",
-                            key=(
-                                f"add_person_role_{shift_form_version}_"
-                                f"{person_index}"
-                            ),
-                        )
-                        if add_errors.get(f"role_{person_index}"):
-                            st.error(add_errors[f"role_{person_index}"])
-                    person_phones.append(person_phone)
-                    person_roles.append(person_role)
-
                 r_noidung = st.text_area(
                     "Nội dung công việc",
                     key=f"add_group_work_{shift_form_version}",
