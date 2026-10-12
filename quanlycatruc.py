@@ -513,7 +513,7 @@ def load_staff_directory():
         return []
 
 
-def sync_staff_phone(name_key, phone_key, staff_directory):
+def sync_staff_phone(name_key, phone_key, role_key, staff_directory):
     selected_id = st.session_state.get(name_key)
     selected_staff = next(
         (item for item in staff_directory if item.get("id") == selected_id),
@@ -521,6 +521,9 @@ def sync_staff_phone(name_key, phone_key, staff_directory):
     )
     st.session_state[phone_key] = (
         str(selected_staff.get("phone", "")).strip() if selected_staff else ""
+    )
+    st.session_state[role_key] = (
+        str(selected_staff.get("role", "")).strip() if selected_staff else ""
     )
 
 
@@ -993,9 +996,13 @@ if menu == STAFF_DIRECTORY_MENU:
                 staff_phone = st.text_input(
                     "Số điện thoại (10 hoặc 11 chữ số)", max_chars=11
                 )
+                staff_role = st.text_input("Chức vụ")
+                staff_team = st.text_input("Đội / Bộ phận")
                 if st.form_submit_button("Thêm vào danh bạ"):
                     normalized_name = " ".join(staff_name.split())
                     normalized_phone = staff_phone.strip()
+                    normalized_role = " ".join(staff_role.split())
+                    normalized_team = " ".join(staff_team.split())
                     duplicate = any(
                         str(item.get("name", "")).casefold() == normalized_name.casefold()
                         and str(item.get("phone", "")).strip() == normalized_phone
@@ -1012,7 +1019,12 @@ if menu == STAFF_DIRECTORY_MENU:
                     else:
                         try:
                             supabase.table("staff_directory").insert(
-                                {"name": normalized_name, "phone": normalized_phone}
+                                {
+                                    "name": normalized_name,
+                                    "phone": normalized_phone,
+                                    "role": normalized_role,
+                                    "team": normalized_team,
+                                }
                             ).execute()
                         except Exception as error:
                             st.error(f"Không thể thêm nhân sự: {error}")
@@ -1033,10 +1045,7 @@ if menu == STAFF_DIRECTORY_MENU:
                 selected_staff_id = st.selectbox(
                     "Chọn nhân sự",
                     list(staff_options),
-                    format_func=lambda value: (
-                        f"{staff_options[value].get('name', '')} - "
-                        f"{staff_options[value].get('phone', '')}"
-                    ),
+                    format_func=lambda value: staff_options[value].get("name", ""),
                     key="staff_directory_selected",
                 )
                 selected_staff = staff_options[selected_staff_id]
@@ -1048,6 +1057,12 @@ if menu == STAFF_DIRECTORY_MENU:
                         "Số điện thoại",
                         value=str(selected_staff.get("phone", "")),
                         max_chars=11,
+                    )
+                    edited_staff_role = st.text_input(
+                        "Chức vụ", value=str(selected_staff.get("role", ""))
+                    )
+                    edited_staff_team = st.text_input(
+                        "Đội / Bộ phận", value=str(selected_staff.get("team", ""))
                     )
                     save_staff, delete_staff = st.columns(2)
                     with save_staff:
@@ -1072,6 +1087,8 @@ if menu == STAFF_DIRECTORY_MENU:
                         else:
                             normalized_name = " ".join(edited_staff_name.split())
                             normalized_phone = edited_staff_phone.strip()
+                            normalized_role = " ".join(edited_staff_role.split())
+                            normalized_team = " ".join(edited_staff_team.split())
                             duplicate = any(
                                 item.get("id") != selected_staff_id
                                 and str(item.get("name", "")).casefold()
@@ -1091,6 +1108,8 @@ if menu == STAFF_DIRECTORY_MENU:
                                         {
                                             "name": normalized_name,
                                             "phone": normalized_phone,
+                                            "role": normalized_role,
+                                            "team": normalized_team,
                                         }
                                     ).eq("id", selected_staff_id).execute()
                                 except Exception as error:
@@ -1373,6 +1392,7 @@ if menu == "Báo Cáo Ca Trực":
                 person_col1, person_col2, person_col3 = st.columns(3)
                 person_name_key = f"add_person_name_{shift_form_version}_{person_index}"
                 person_phone_key = f"add_person_phone_{shift_form_version}_{person_index}"
+                person_role_key = f"add_person_role_{shift_form_version}_{person_index}"
                 with person_col1:
                     selected_person_name = st.selectbox(
                         "Họ và tên",
@@ -1381,8 +1401,7 @@ if menu == "Báo Cáo Ca Trực":
                             " " if value is None
                             else (
                                 (
-                                    f"{directory_by_id[value].get('name', '')} - "
-                                    f"{directory_by_id[value].get('phone', '')}"
+                                    directory_by_id[value].get("name", "")
                                 )
                                 if value in directory_by_id
                                 else value
@@ -1390,7 +1409,12 @@ if menu == "Báo Cáo Ca Trực":
                         ),
                         key=person_name_key,
                         on_change=sync_staff_phone,
-                        args=(person_name_key, person_phone_key, staff_directory),
+                        args=(
+                            person_name_key,
+                            person_phone_key,
+                            person_role_key,
+                            staff_directory,
+                        ),
                     )
                     if selected_person_name == "Nhập tên ngoài danh bạ":
                         person_name = st.text_input(
@@ -1428,14 +1452,23 @@ if menu == "Báo Cáo Ca Trực":
                     if add_errors.get(f"phone_{person_index}"):
                         st.error(add_errors[f"phone_{person_index}"])
                 with person_col3:
+                    selected_directory_role = (
+                        str(
+                            directory_by_id[selected_person_name].get("role", "")
+                        ).strip()
+                        if selected_person_name in directory_by_id
+                        else ""
+                    )
+                    person_role_options = list(role_options)
+                    if selected_directory_role and selected_directory_role not in person_role_options:
+                        person_role_options.insert(0, selected_directory_role)
                     person_role = st.selectbox(
                         "Chức vụ",
-                        ["", *role_options],
+                        ["", *person_role_options],
                         index=0,
                         format_func=lambda value: value or " ",
                         key=(
-                            f"add_person_role_{shift_form_version}_"
-                            f"{person_index}"
+                            person_role_key
                         ),
                     )
                     if add_errors.get(f"role_{person_index}"):
