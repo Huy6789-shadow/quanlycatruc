@@ -46,7 +46,13 @@ STAFF_DIRECTORY_MENU = "Danh Bạ Nhân Sự"
 def normalize_report_label(value):
     return " ".join(str(value or "").split()).casefold()
 
-st.set_page_config(page_title="Quản lý vận hành", layout="wide", initial_sidebar_state="collapsed")
+PAGE_ICON_PATH = Path(__file__).with_name("logo.png")
+st.set_page_config(
+    page_title="Quản lý vận hành SG - TL - MT",
+    page_icon=str(PAGE_ICON_PATH),
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
 st.markdown("""
 <style>
