@@ -20,6 +20,9 @@ alter table public.vehicles
     add column if not exists so_km_bao_duong_gan_nhat bigint not null default 0,
     add column if not exists so_km_bao_duong_du_kien bigint not null default 0;
 
+-- Nếu bảng đã tồn tại từ trước, cần chạy toàn bộ file này trong Supabase SQL Editor
+-- để đồng bộ các cột trước khi nhập báo cáo phương tiện.
+
 alter table public.vehicles enable row level security;
 
 drop policy if exists "vehicles_public_read" on public.vehicles;

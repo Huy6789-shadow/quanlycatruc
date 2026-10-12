@@ -11,7 +11,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
-from supabase import create_client
+from supabase import ClientOptions, create_client
 
 
 SHIFT_ROLE_PRIORITY = {
@@ -376,7 +376,15 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
         flex:0 0 100px !important; width:100px !important; min-width:100px !important;
     }
     [data-testid="stRadioOption"] {
-        min-height:2.35rem; font-size:.68rem; line-height:1.1; padding:.4rem .3rem;
+        min-height:2.35rem; font-size:.62rem; line-height:1.1; padding:.35rem .2rem;
+        flex:1 1 calc(33.333% - .25rem) !important;
+        min-width:0 !important;
+        white-space:normal !important;
+        overflow-wrap:anywhere;
+    }
+    [data-testid="stRadioGroup"] {
+        flex-wrap:wrap !important;
+        gap:.25rem !important;
     }
     div[role="tablist"] button[role="tab"],
     div[role="tablist"] > div[role="tab"],
@@ -410,7 +418,15 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
+    return create_client(
+        url,
+        key,
+        options=ClientOptions(
+            postgrest_client_timeout=10,
+            storage_client_timeout=10,
+            function_client_timeout=10,
+        ),
+    )
 try:
     supabase = init_connection()
     db_connected = True
@@ -449,6 +465,56 @@ def next_available_id(records):
 def vehicle_km_value(value):
     parsed = pd.to_numeric(value, errors="coerce")
     return int(parsed) if pd.notna(parsed) and parsed >= 0 else 0
+
+
+def insert_vehicle_record(supabase_client, record):
+    """Insert a vehicle while remaining compatible with an older table schema."""
+    pending_record = dict(record)
+    dropped_columns = []
+    while pending_record:
+        try:
+            supabase_client.table("vehicles").insert(pending_record).execute()
+            return dropped_columns
+        except Exception as error:
+            error_text = str(error)
+            missing_column = re.search(
+                r"""['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s+column\s+of\s+['"]?vehicles['"]?""",
+                error_text,
+            )
+            if "PGRST204" not in error_text or not missing_column:
+                raise
+            column_name = missing_column.group(1)
+            if column_name not in pending_record:
+                raise
+            dropped_columns.append(column_name)
+            pending_record.pop(column_name)
+    raise RuntimeError("Bảng vehicles không có các cột dữ liệu bắt buộc.")
+
+
+def update_vehicle_record(supabase_client, record, vehicle_id):
+    """Update a vehicle while remaining compatible with an older table schema."""
+    pending_record = dict(record)
+    dropped_columns = []
+    while pending_record:
+        try:
+            supabase_client.table("vehicles").update(pending_record).eq(
+                "id", vehicle_id
+            ).execute()
+            return dropped_columns
+        except Exception as error:
+            error_text = str(error)
+            missing_column = re.search(
+                r"""['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s+column\s+of\s+['"]?vehicles['"]?""",
+                error_text,
+            )
+            if "PGRST204" not in error_text or not missing_column:
+                raise
+            column_name = missing_column.group(1)
+            if column_name not in pending_record:
+                raise
+            dropped_columns.append(column_name)
+            pending_record.pop(column_name)
+    raise RuntimeError("Bảng vehicles không có các cột dữ liệu bắt buộc.")
 
 
 def clear_shift_form_state():
@@ -1578,6 +1644,10 @@ elif menu == "Phương Tiện":
         vehicle_data = st.session_state.vehicle_reports
         st.warning("Chưa cấu hình Supabase. Dữ liệu phương tiện hiện chỉ lưu trong phiên làm việc.")
 
+    vehicle_schema_warning = st.session_state.pop("vehicle_schema_warning", None)
+    if vehicle_schema_warning:
+        st.warning(vehicle_schema_warning)
+
     vehicle_df = pd.DataFrame(vehicle_data)
     for item in vehicle_data:
         plate = str(item.get("bien_so", "")).strip()
@@ -1733,10 +1803,16 @@ elif menu == "Phương Tiện":
                         }
                         if vehicle_db_available:
                             try:
-                                supabase.table("vehicles").insert(record).execute()
+                                dropped_columns = insert_vehicle_record(supabase, record)
                             except Exception as error:
                                 st.error(f"Không thể lưu báo cáo phương tiện: {error}")
                             else:
+                                if dropped_columns:
+                                    st.session_state.vehicle_schema_warning = (
+                                        "Đã lưu báo cáo, nhưng bảng vehicles đang thiếu "
+                                        f"cột: {', '.join(dropped_columns)}. "
+                                        "Hãy chạy vehicles_schema.sql để lưu đủ dữ liệu."
+                                    )
                                 clear_vehicle_form_state()
                                 st.success("Đã thêm báo cáo phương tiện.")
                                 st.rerun()
@@ -1823,10 +1899,18 @@ elif menu == "Phương Tiện":
                         }
                         if vehicle_db_available:
                             try:
-                                supabase.table("vehicles").insert(new_vehicle_record).execute()
+                                dropped_columns = insert_vehicle_record(
+                                    supabase, new_vehicle_record
+                                )
                             except Exception as error:
                                 st.error(f"Không thể lưu xe mới: {error}")
                             else:
+                                if dropped_columns:
+                                    st.session_state.vehicle_schema_warning = (
+                                        "Đã lưu xe mới, nhưng bảng vehicles đang thiếu "
+                                        f"cột: {', '.join(dropped_columns)}. "
+                                        "Hãy chạy vehicles_schema.sql để lưu đủ dữ liệu."
+                                    )
                                 clear_vehicle_form_state()
                                 st.success("Đã thêm xe mới.")
                                 st.rerun()
@@ -1944,12 +2028,18 @@ elif menu == "Phương Tiện":
                             }
                             if vehicle_db_available:
                                 try:
-                                    supabase.table("vehicles").update(updated_record).eq(
-                                        "id", selected_vehicle_id
-                                    ).execute()
+                                    dropped_columns = update_vehicle_record(
+                                        supabase, updated_record, selected_vehicle_id
+                                    )
                                 except Exception as error:
                                     st.error(f"Không thể cập nhật báo cáo phương tiện: {error}")
                                 else:
+                                    if dropped_columns:
+                                        st.session_state.vehicle_schema_warning = (
+                                            "Đã cập nhật báo cáo, nhưng bảng vehicles đang thiếu "
+                                            f"cột: {', '.join(dropped_columns)}. "
+                                            "Hãy chạy vehicles_schema.sql để lưu đủ dữ liệu."
+                                        )
                                     st.success("Đã cập nhật báo cáo phương tiện.")
                                     st.rerun()
                             else:
