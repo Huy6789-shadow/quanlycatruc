@@ -365,14 +365,24 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
 .schedule-table .schedule-group-row + tr td { border-top:0; }
 .admin-panel { background:#fff; border-top:3px solid var(--navy); padding:.75rem; margin-top:1rem; }
 @media (max-width:650px) {
-    .block-container { padding:.25rem .3rem 1.25rem; }
-    .agency-header { position:relative; min-height:78px; display:block; padding:.45rem .25rem .5rem; }
+    .block-container { padding:.2rem .25rem 1rem; }
+    .agency-header { position:relative; min-height:70px; display:block; padding:.35rem .2rem .4rem; }
     .agency-logo { position:absolute; top:.45rem; left:.3rem; z-index:1; width:52px; height:38px; max-width:52px; object-position:left center; }
     .agency-copy { display:block; width:100%; margin:0; padding:0 .1rem; text-align:center; }
-    .agency-copy h1 { font-size:.9rem; line-height:1; white-space:nowrap; text-align:center; }
-    .agency-copy p { font-size:.78rem; line-height:1; margin:.12rem auto 0; text-align:center; white-space:nowrap; }
-    .date-strip { font-size:.78rem; padding:.42rem .25rem; margin:.4rem 0; }
-    .section-caption { font-size:.9rem; padding:.5rem .25rem; }
+    .agency-copy h1 { font-size:.78rem; line-height:1.05; white-space:normal; text-align:center; }
+    .agency-copy p { font-size:.66rem; line-height:1.05; margin:.1rem auto 0; white-space:normal; }
+    .date-strip { font-size:.7rem; padding:.32rem .2rem; margin:.3rem 0; }
+    .section-caption { font-size:.76rem; padding:.38rem .2rem; }
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stText"],
+    [data-testid="stCaptionContainer"] { font-size:.78rem; }
+    [data-testid="stTextInput"] input,
+    [data-testid="stSelectbox"] [role="combobox"],
+    [data-testid="stDateInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextArea"] textarea { font-size:.78rem !important; }
+    [data-testid="stButton"] > button,
+    [data-testid="stFormSubmitButton"] > button { font-size:.72rem !important; padding:.35rem .45rem !important; }
     [data-testid="stHorizontalBlock"]:has(.main-navigation) {
         display:flex !important; flex-wrap:nowrap !important; align-items:center !important;
     }
@@ -383,30 +393,45 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
         flex:0 0 100px !important; width:100px !important; min-width:100px !important;
     }
     [data-testid="stRadioOption"] {
-        min-height:2.35rem; font-size:.62rem; line-height:1.1; padding:.35rem .2rem;
-        flex:1 1 calc(33.333% - .25rem) !important;
-        min-width:0 !important;
+        min-height:2rem; font-size:.58rem; line-height:1.05; padding:.25rem .15rem;
+        flex:0 0 auto !important; min-width:0 !important;
         white-space:normal !important;
         overflow-wrap:anywhere;
     }
     [data-testid="stRadioGroup"] {
-        flex-wrap:wrap !important;
-        gap:.25rem !important;
+        flex-wrap:nowrap !important;
+        gap:.2rem !important;
+        overflow-x:auto !important;
+        padding-bottom:.15rem;
     }
+    [data-testid="stRadioGroup"] label { max-width:6.2rem; }
     div[role="tablist"] button[role="tab"],
     div[role="tablist"] > div[role="tab"],
     div[data-baseweb="tab-list"] button[data-baseweb="tab"],
     div[data-baseweb="tab-list"] [role="tab"] {
-        font-size:.62rem !important;
-        line-height:1.1 !important;
-        padding:.55rem .18rem !important;
+        flex:0 0 4.25rem !important;
+        min-width:4.25rem !important;
+        font-size:.58rem !important;
+        line-height:1.05 !important;
+        padding:.4rem .12rem !important;
         white-space:normal !important;
         text-align:center !important;
+    }
+    div[role="tablist"],
+    div[data-baseweb="tab-list"] {
+        justify-content:flex-start !important;
+        overflow-x:auto !important;
+        -webkit-overflow-scrolling:touch;
+    }
+    div[role="tablist"] > div,
+    div[data-baseweb="tab-list"] > div {
+        flex:0 0 auto !important;
+        min-width:4.25rem !important;
     }
     .schedule-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
     .schedule-table {
         min-width:820px;
-        font-size:.68rem;
+        font-size:.62rem;
         line-height:1.2;
     }
     .schedule-table th,
@@ -414,8 +439,8 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
         padding:.3rem .35rem;
         white-space:nowrap;
     }
-    .schedule-table th { font-size:.64rem; }
-    .schedule-table td { font-size:.68rem; }
+    .schedule-table th { font-size:.58rem; }
+    .schedule-table td { font-size:.62rem; }
 }
 </style>
 """, unsafe_allow_html=True)
