@@ -27,6 +27,8 @@ SHIFT_ROLE_PRIORITY = {
     "Tổ Trưởng": 9,
     "Kíp Trưởng": 10,
     "HCNS": 11,
+    "Tuần Đường": 12,
+    "Lái Xe": 13,
 }
 
 REPORT_GROUP_COLORS = (
@@ -1366,13 +1368,22 @@ if menu == "Báo Cáo Ca Trực":
                 "Phó Giám Đốc", "Hạt Trưởng", "Hạt Phó", "Trưởng Phòng",
                 "Phó Phòng","Trạm Phó", "Đội Trưởng", "Đội Phó", "Ca Trưởng",
                 "Tổ Trưởng", "Kíp Trưởng", "HCNS", "Giám Đốc", "Nhân viên",
+                "Tuần Đường", "Lái Xe",
             ]
             add_errors = st.session_state.get("add_errors", {})
-            team_options = sorted(set(df.get("bo_phan", pd.Series(dtype=str)).dropna().astype(str)) | {
+            moved_role_labels = {"Tuần Đường", "Lái Xe"}
+            team_options = sorted({
+                *(
+                    value
+                    for value in df.get("bo_phan", pd.Series(dtype=str))
+                    .dropna()
+                    .astype(str)
+                    if value not in moved_role_labels
+                ),
                 "Tổ ITS", "Đội PCCC&CHCN TLMT", "Đội PCCC&CHCN TPHCM-TL",
-                "Hạt QLĐB", "TTP", "Tổ Điện", "Hotline", "Tuần Đường",
+                "Hạt QLĐB", "TTP", "Tổ Điện", "Hotline",
                 "Ban Lãnh Đạo", "Phòng Tổng Hợp", "GSHK",
-                TRAFFIC_SAFETY_TEAM, PROJECT_TEAM, "Lái Xe",
+                TRAFFIC_SAFETY_TEAM, PROJECT_TEAM,
             })
             location_options = sorted(set(df.get("vi_tri", pd.Series(dtype=str)).dropna().astype(str)) | {
                 "TMC TL-MT", "TMC TP.HCM-TL", "Tuyến cao tốc TL-MT", "Tuyến cao tốc TP.HCM-TL",
