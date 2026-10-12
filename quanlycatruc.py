@@ -1365,6 +1365,7 @@ if menu == "Báo Cáo Ca Trực":
                 item["id"]: item for item in directory_options
             }
             person_names = []
+            person_selections = []
             for person_index in range(r_songuoi):
                 st.markdown(f"**Nhân sự {person_index + 1}**")
                 person_col1 = st.columns(3)[0]
@@ -1406,12 +1407,17 @@ if menu == "Báo Cáo Ca Trực":
                     if add_errors.get(f"name_{person_index}"):
                         st.error(add_errors[f"name_{person_index}"])
                 person_names.append(person_name)
+                person_selections.append(selected_person_name)
 
             with st.form("add_form"):
                 person_phones = []
                 person_roles = []
                 for person_index, person_name in enumerate(person_names):
                     person_col1, person_col2 = st.columns(2)
+                    person_phone_key = (
+                        f"add_person_phone_{shift_form_version}_{person_index}"
+                    )
+                    selected_person_name = person_selections[person_index]
                     directory_phone = (
                         str(directory_by_id[selected_person_name].get("phone", "")).strip()
                         if selected_person_name in directory_by_id
