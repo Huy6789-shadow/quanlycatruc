@@ -359,12 +359,21 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
     border-color:#142b78 !important;
 }
 .schedule-table-wrap { width:100%; overflow-x:auto; margin:.4rem 0 1rem; }
-.schedule-table { width:100%; border-collapse:collapse; background:#fff; color:#111; font-size:.9rem; }
+.schedule-table { width:max-content; min-width:100%; border-collapse:collapse; background:#fff; color:#111; font-size:.9rem; table-layout:auto; }
 .schedule-table th, .schedule-table td { border:1px solid #d9d9d9; padding:.55rem .5rem; text-align:left; vertical-align:top; white-space:normal; }
 .schedule-table th { background:#edf1f5; color:#111; font-weight:700; }
 .schedule-table td { background:#fff; color:#111; line-height:1.45; }
 .schedule-table .schedule-group-row td { font-weight:700; border-top:2px solid currentColor; }
 .schedule-table .schedule-group-row + tr td { border-top:0; }
+.schedule-table th:nth-child(3), .schedule-table td:nth-child(3) { min-width:12rem; white-space:nowrap; }
+.schedule-table th:nth-child(7), .schedule-table td:nth-child(7) {
+    min-width: 300px;
+    max-width: 500px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-align: justify;
+    line-height: 1.6;
+}
 .admin-panel { background:#fff; border-top:3px solid var(--navy); padding:.75rem; margin-top:1rem; }
 @media (max-width:650px) {
     .block-container { padding:.2rem .25rem 1rem; }
@@ -443,7 +452,7 @@ div[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {
     }
     .schedule-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
     .schedule-table {
-        min-width:820px;
+        min-width:1180px;
         font-size:.62rem;
         line-height:1.2;
     }
@@ -1201,14 +1210,14 @@ if menu == "Báo Cáo Ca Trực":
 
     if not df.empty:
         df = df.assign(
-            _team_sort=df["bo_phan"].fillna("").astype(str).str.casefold(),
-            _location_sort=df["vi_tri"].fillna("").astype(str).str.casefold(),
-            _role_name_sort=df["chuc_vu"].fillna("").astype(str).str.casefold(),
+            _location_sort=df["vi_tri"].map(normalize_report_label),
+            _team_sort=df["bo_phan"].map(normalize_report_label),
+            _role_name_sort=df["chuc_vu"].map(normalize_report_label),
             _role_order=df["chuc_vu"].fillna("").map(
                 lambda value: SHIFT_ROLE_PRIORITY.get(str(value).strip(), 99)
             )
         ).sort_values(
-            ["_team_sort", "_location_sort", "_role_order", "_role_name_sort"],
+            ["_location_sort", "_team_sort", "_role_order", "_role_name_sort"],
             kind="stable",
         ).drop(columns=["_team_sort", "_location_sort", "_role_name_sort"])
 
@@ -1233,28 +1242,31 @@ if menu == "Báo Cáo Ca Trực":
         schedule = make_schedule(source_df)
         headers = "".join(f"<th>{html.escape(str(column))}</th>" for column in schedule.columns)
         rows = []
-        previous_group = None
+        previous_location = None
+        previous_subgroup = None
         group_index = -1
         for _, row in schedule.iterrows():
-            group = (
-                str(row["ĐỘI/BỘ PHẬN"]).strip() or "Chưa phân loại",
-                str(row["VỊ TRÍ TRỰC"]).strip() or "Chưa phân loại",
+            location_key = normalize_report_label(row["VỊ TRÍ TRỰC"]) or "chưa phân loại"
+            team_key = normalize_report_label(row["ĐỘI/BỘ PHẬN"]) or "chưa phân loại"
+            subgroup = (team_key, location_key)
+            location_label = (
+                str(row["VỊ TRÍ TRỰC"]).strip() or "Chưa phân loại"
             )
-            if group != previous_group:
+            team_label = str(row["ĐỘI/BỘ PHẬN"]).strip() or "Chưa phân loại"
+            if location_key != previous_location:
                 group_index += 1
                 background, foreground = REPORT_GROUP_COLORS[
                     group_index % len(REPORT_GROUP_COLORS)
                 ]
-                group_label = (
-                    f"Đội/Bộ phận: {html.escape(group[0])}"
-                    f" &nbsp;|&nbsp; Vị trí làm việc: {html.escape(group[1])}"
-                )
                 rows.append(
                     f'<tr class="schedule-group-row" style="background:{background};'
                     f'color:{foreground};"><td colspan="{len(schedule.columns)}">'
-                    f"{group_label}</td></tr>"
+                    f"Vị trí làm việc: {html.escape(location_label)}</td></tr>"
                 )
-                previous_group = group
+                previous_location = location_key
+                previous_subgroup = None
+            if subgroup != previous_subgroup:
+                previous_subgroup = subgroup
             cells = []
             for value in row:
                 cell_value = html.escape(str(value) if pd.notna(value) else "").replace("\n", "<br>")
@@ -2069,7 +2081,6 @@ elif menu == "Phương Tiện":
             vehicle_form_version = st.session_state.get("vehicle_form_version", 0)
             st.info(
                 "Nhập thủ công biển số và loại xe mới. Có thể sử dụng mục này "
-                "khi danh mục chưa có xe hoặc bảng `vehicles` chưa được tạo."
             )
             with st.form("add_new_vehicle"):
                 new_vehicle_date = st.date_input(
