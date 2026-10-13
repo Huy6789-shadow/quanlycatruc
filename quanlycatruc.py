@@ -43,6 +43,18 @@ SHIFT_ROLE_PRIORITY = {
     "Lái xe": 13.5,
 }
 
+TEAM_PRIORITY = {
+    "Ban Lãnh Đạo": 0,
+    "Phòng Tổng Hợp": 1,
+    "Hạt QLĐB": 2,
+    "Tổ ITS": 3,
+    "Tổ Điện": 4,
+    "Hotline": 5,
+    "Đội PCCC&CHCN TPHCM-TL": 6,
+    "Đội PCCC&CHCN TLMT": 7,
+    "GSHK": 8,
+    "TTP": 9,
+}
 REPORT_GROUP_COLORS = (
     ("#eef3ff", "#142b78"),
     ("#effaf3", "#176b3a"),
@@ -931,21 +943,20 @@ if st.session_state.is_admin:
                     and "chuc_vu" in table_frame.columns
                 ):
                     table_frame = table_frame.assign(
-                        _team_sort=table_frame["bo_phan"].fillna("").astype(str).str.casefold(),
-                        _location_sort=table_frame.get(
-                            "vi_tri", pd.Series("", index=table_frame.index)
-                        ).fillna("").astype(str).str.casefold(),
+                        _location_sort=table_frame.get("vi_tri", pd.Series("", index=table_frame.index)).fillna("").astype(str).str.casefold(),
+                        _team_name_sort=table_frame["bo_phan"].fillna("").astype(str).str.casefold(),
+                        _team_order=table_frame["bo_phan"].fillna("").map(
+                            lambda value: {k.casefold(): v for k, v in TEAM_PRIORITY.items()}.get(str(value).strip().casefold(), 99)
+                        ),
                         _role_name_sort=table_frame["chuc_vu"].fillna("").astype(str).str.casefold(),
                         _role_order=table_frame["chuc_vu"].fillna("").map(
-                            lambda value: SHIFT_ROLE_PRIORITY.get(
-                                str(value).strip(), 99
-                            )
+                            lambda value: {k.casefold(): v for k, v in SHIFT_ROLE_PRIORITY.items()}.get(str(value).strip().casefold(), 99)
                         )
                     ).sort_values(
-                        ["_team_sort", "_location_sort", "_role_order", "_role_name_sort"],
+                        ["_location_sort", "_team_order", "_team_name_sort", "_role_order", "_role_name_sort"],
                         kind="stable",
                     ).drop(
-                        columns=["_team_sort", "_location_sort", "_role_name_sort", "_role_order"]
+                        columns=["_location_sort", "_team_name_sort", "_team_order", "_role_name_sort", "_role_order"]
                     )
                 if sheet_name in export_columns:
                     ordered_columns = export_columns[sheet_name]
@@ -1223,15 +1234,22 @@ if menu == "Báo Cáo Ca Trực":
     if not df.empty:
         df = df.assign(
             _location_sort=df["vi_tri"].map(normalize_report_label),
-            _team_sort=df["bo_phan"].map(normalize_report_label),
+            _team_name_sort=df["bo_phan"].map(normalize_report_label),
+            _team_order=df["bo_phan"].fillna("").map(
+                lambda value: {k.casefold(): v for k, v in TEAM_PRIORITY.items()}.get(
+                    str(value).strip().casefold(), 99
+                )
+            ),
             _role_name_sort=df["chuc_vu"].map(normalize_report_label),
             _role_order=df["chuc_vu"].fillna("").map(
-                lambda value: SHIFT_ROLE_PRIORITY.get(str(value).strip(), 99)
+                lambda value: {k.casefold(): v for k, v in SHIFT_ROLE_PRIORITY.items()}.get(
+                    str(value).strip().casefold(), 99
+                )
             )
         ).sort_values(
-            ["_location_sort", "_team_sort", "_role_order", "_role_name_sort"],
+            ["_location_sort", "_team_order", "_team_name_sort", "_role_order", "_role_name_sort"],
             kind="stable",
-        ).drop(columns=["_team_sort", "_location_sort", "_role_name_sort"])
+        ).drop(columns=["_location_sort", "_team_name_sort", "_team_order", "_role_name_sort", "_role_order"])
 
     def make_schedule(source_df):
         def source_column_or_blank(name):
