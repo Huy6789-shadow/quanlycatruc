@@ -31,7 +31,7 @@ SHIFT_ROLE_PRIORITY = {
     "Đội Phó": 7,
     "Đội phó": 7.5,
     "Ca Trưởng": 8,
-    "Ca trưởng": 8.5,
+    "Trưởng ca": 8.5,
     "Tổ Trưởng": 9,
     "Tổ trưởng": 9.5,
     "Kíp Trưởng": 10,
